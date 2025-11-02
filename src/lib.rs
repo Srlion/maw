@@ -16,6 +16,7 @@ pub mod prelude {
     pub use crate::app::App;
     pub use crate::ctx::Ctx;
     pub use crate::error::Error as MawError;
+    pub use crate::handler::HandlerOutput;
     pub use crate::router::Router;
     pub use crate::status_error::StatusError;
     pub use http::StatusCode;

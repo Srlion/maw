@@ -8,7 +8,7 @@ use http::Method;
 
 use crate::{async_fn::AsyncFn1, ctx::Ctx, status_error::StatusError};
 
-pub(crate) type HandlerOutput = Result<(), StatusError>;
+pub type HandlerOutput = Result<(), StatusError>;
 
 pub type Handler = Arc<dyn HandlerRun>;
 

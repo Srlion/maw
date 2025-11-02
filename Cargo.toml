@@ -2,6 +2,10 @@
 name = "maw"
 version = "0.1.0"
 edition = "2024"
+description = "A simple and efficient web framework for Rust."
+license = "MIT"
+repository = "https://github.com/Srlion/maw"
+authors = ["Srlion <srlion32@gmail.com>"]
 
 [dependencies]
 smallvec = "1"

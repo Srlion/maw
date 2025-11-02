@@ -19,6 +19,7 @@ pub struct Request {
     pub(crate) body: IncomingBody,
     pub params: HashMap<SmolStr, SmolStr>,
     pub(crate) locals: Locals,
+    pub(crate) body_bytes: Option<Bytes>,
 }
 
 impl Request {
@@ -35,6 +36,7 @@ impl Request {
             body,
             params,
             locals: Locals::new(),
+            body_bytes: None,
         }
     }
 
@@ -130,22 +132,22 @@ impl Request {
         self.parts.version
     }
 
+    /// Get raw body bytes.
+    ///
+    /// If body has already been read, returns the cached bytes. (Limits are not re-applied.)
+    ///
+    /// Default limit is 4MB.
     #[inline]
-    pub fn body(&mut self) -> &IncomingBody {
-        &self.body
-    }
-
-    #[inline]
-    pub fn body_mut(&mut self) -> &mut IncomingBody {
-        &mut self.body
-    }
-
-    #[inline]
-    pub async fn take_body(&mut self, limit: Option<usize>) -> Result<Bytes, Error> {
-        let limit = limit.unwrap_or(2 * 1024 * 1024); // 2MB default
-        let limited = http_body_util::Limited::new(self.body_mut(), limit);
+    pub async fn body_raw(&mut self, limit: Option<usize>) -> Result<&Bytes, Error> {
+        if let Some(ref bytes) = self.body_bytes {
+            return Ok(bytes);
+        }
+        let limit = limit.unwrap_or_else(|| self.app.body_limit());
+        let limited = http_body_util::Limited::new(&mut self.body, limit);
         let collected = limited.collect().await.map_err(Error::BodyCollect)?;
-        Ok(collected.to_bytes())
+        let bytes = collected.to_bytes();
+        self.body_bytes = Some(bytes);
+        Ok(self.body_bytes.as_ref().unwrap())
     }
 
     #[inline]
@@ -153,8 +155,8 @@ impl Request {
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, Error> {
-        let bytes = self.take_body(limit).await?;
-        let value: T = serde_json::from_slice(&bytes)?;
+        let bytes = self.body_raw(limit).await?;
+        let value: T = serde_json::from_slice(bytes)?;
         Ok(value)
     }
 
@@ -163,8 +165,8 @@ impl Request {
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, Error> {
-        let bytes = self.take_body(limit).await?;
-        let value: T = serde_urlencoded::from_bytes(&bytes)?;
+        let bytes = self.body_raw(limit).await?;
+        let value: T = serde_urlencoded::from_bytes(bytes)?;
         Ok(value)
     }
 
@@ -173,8 +175,8 @@ impl Request {
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, Error> {
-        let bytes = self.take_body(limit).await?;
-        let str = std::str::from_utf8(&bytes)?;
+        let bytes = self.body_raw(limit).await?;
+        let str = std::str::from_utf8(bytes)?;
         let value: T = quick_xml::de::from_str(str)?;
         Ok(value)
     }

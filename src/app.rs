@@ -29,6 +29,7 @@ pub struct App {
     pub(crate) router: router::Router,
     pub(crate) render_env: minijinja::Environment<'static>,
     pub(crate) locals: Mutex<Locals>,
+    pub(crate) body_limit: usize,
 }
 
 impl App {
@@ -46,6 +47,21 @@ impl App {
 
     pub fn views(mut self, path: &str) -> Self {
         self.render_env.set_loader(path_loader(path));
+        self
+    }
+
+    /// Gets the body limit for the application.
+    ///
+    /// Default is 4MB.
+    pub fn body_limit(&self) -> usize {
+        self.body_limit
+    }
+
+    /// Sets the body limit for the application.
+    ///
+    /// Default is 4MB.
+    pub fn set_body_limit(&mut self, limit: usize) -> &mut Self {
+        self.body_limit = limit;
         self
     }
 
@@ -132,6 +148,7 @@ impl Clone for App {
             router: self.router.clone(),
             render_env: self.render_env.clone(),
             locals: Mutex::new(self.locals.lock().unwrap().clone()),
+            body_limit: 4 * 1024 * 1024, // 4MB default
         }
     }
 }

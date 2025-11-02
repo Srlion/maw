@@ -40,12 +40,12 @@ impl App {
     /// Sets the router for the application.
     ///
     /// Changes to the router after the server has started will not take effect.
-    pub fn router(&mut self, router: router::Router) -> &mut Self {
+    pub fn router(mut self, router: router::Router) -> Self {
         self.router = router;
         self
     }
 
-    pub fn views(&mut self, path: &str) -> &mut Self {
+    pub fn views(mut self, path: &str) -> Self {
         self.render_env.set_loader(path_loader(path));
         self
     }
@@ -70,12 +70,12 @@ impl App {
         self
     }
 
-    pub async fn listen<A>(&self, addr: A) -> Result<(), Error>
+    pub async fn listen<A>(self, addr: A) -> Result<(), Error>
     where
         A: net::ToSocketAddrs + std::fmt::Debug + 'static,
     {
         let router = self.router.build()?;
-        let arc_app = Arc::new(self.clone());
+        let arc_app = Arc::new(self);
 
         let addr = addr
             .to_socket_addrs()?

@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 license = "MIT"

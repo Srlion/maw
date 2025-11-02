@@ -73,7 +73,7 @@ impl Router {
     }
 
     #[inline(never)]
-    pub fn route<F>(self, path: impl Into<String>, method: Method, f: F) -> Self
+    pub fn route<F>(self, method: Method, path: impl Into<String>, f: F) -> Self
     where
         for<'a> F: AsyncFn2<&'a mut Request, &'a mut Response, Output = HandlerOutput>
             + Send

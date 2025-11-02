@@ -72,6 +72,17 @@ impl Router {
         self
     }
 
+    #[inline(never)]
+    pub fn route<F>(self, path: impl Into<String>, method: Method, f: F) -> Self
+    where
+        for<'a> F: AsyncFn2<&'a mut Request, &'a mut Response, Output = HandlerOutput>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.push(Router::with_path(path).handle(method, f))
+    }
+
     /// Global middleware (inherited by children)
     #[inline(never)]
     pub fn middleware<F>(mut self, f: F) -> Self

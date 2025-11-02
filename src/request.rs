@@ -70,6 +70,17 @@ impl Request {
             .and_then(|v| T::deserialize(v.into_deserializer()).map_err(Error::Parse))
     }
 
+    /// Get param as &str.
+    ///
+    /// Returns empty string if not found.
+    #[inline]
+    pub fn param_str(&self, key: &str) -> &str {
+        match self.params.get(key) {
+            Some(v) => v.as_str(),
+            None => "",
+        }
+    }
+
     #[inline]
     pub fn method(&self) -> &Method {
         &self.parts.method

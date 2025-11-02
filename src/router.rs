@@ -1,33 +1,25 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicBool};
 
 use http::Method;
-use rustc_hash::FxHashMap;
 
 use crate::{
-    async_fn::{AsyncFn2, AsyncFn3},
-    handler::{HandlerOutput, HandlerWrapper, MethodHandler, MiddlewareHandler},
-    next::Next,
-    request::Request,
-    response::Response,
+    async_fn::AsyncFn1,
+    ctx::Ctx,
+    handler::{Handler, HandlerOutput, HandlerType, HandlerWrapper},
 };
 
-pub(crate) type MatchRouter = Arc<matchit::Router<Arc<Handlers>>>;
+pub(crate) type MatchRouter = Arc<matchit::Router<Arc<[Handler]>>>;
 
-#[derive(Clone, Default, Debug)]
-pub struct Handlers {
-    pub(crate) middlewares: Vec<MiddlewareHandler>,
-    pub(crate) methods: FxHashMap<Method, MethodHandler>,
-    pub(crate) all: Option<MethodHandler>,
+#[derive(Clone)]
+pub(crate) enum RouterItem {
+    Handler(Handler),
+    Child(Box<Router>),
 }
 
 #[derive(Clone, Default)]
 pub struct Router {
     path: String,
-    handler: FxHashMap<Method, MethodHandler>,
-    all_handler: Option<MethodHandler>,
-    children: Vec<Router>,
-    global_middlewares: Vec<MiddlewareHandler>, // global middlewares
-    local_middlewares: Vec<MiddlewareHandler>,  // local middlewares
+    items: Vec<RouterItem>,
 }
 
 impl Router {
@@ -38,7 +30,7 @@ impl Router {
 
     #[inline(never)]
     pub fn push(mut self, router: Router) -> Self {
-        self.children.push(router);
+        self.items.push(RouterItem::Child(Box::new(router)));
         self
     }
 
@@ -50,50 +42,66 @@ impl Router {
         }
         Self {
             path,
-            ..Self::default()
+            items: Vec::new(),
         }
     }
 
     #[inline(never)]
-    pub fn handle<F>(mut self, method: Method, f: F) -> Self
+    fn handle_impl<F>(mut self, method: Method, f: F, skip: usize) -> Self
     where
-        for<'a> F: AsyncFn2<&'a mut Request, &'a mut Response, Output = HandlerOutput>
-            + Send
-            + Sync
-            + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
     {
-        assert!(
-            !self.handler.contains_key(&method),
-            "Handler for method {method} already exists on path {}",
-            self.path
-        );
-        let f = Arc::new(HandlerWrapper::new(f, ""));
-        self.handler.insert(method.clone(), f);
+        for item in &self.items {
+            if let RouterItem::Handler(existing) = item
+                && let HandlerType::Method {
+                    method: existing_method,
+                    ..
+                } = existing.handler_type()
+                && *existing_method == method
+            {
+                panic!("Handler for method {} already exists in this route", method);
+            }
+        }
+        let handler = Arc::new(HandlerWrapper::new(
+            f,
+            HandlerType::Method {
+                method,
+                use_as_head: AtomicBool::new(false),
+            },
+            skip,
+        ));
+        self.items.push(RouterItem::Handler(handler));
         self
+    }
+
+    #[inline(never)]
+    pub fn handle<F>(self, method: Method, f: F) -> Self
+    where
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
+    {
+        self.handle_impl(method, f, 4)
     }
 
     #[inline(never)]
     pub fn route<F>(self, method: Method, path: impl Into<String>, f: F) -> Self
     where
-        for<'a> F: AsyncFn2<&'a mut Request, &'a mut Response, Output = HandlerOutput>
-            + Send
-            + Sync
-            + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
     {
-        self.push(Router::with_path(path).handle(method, f))
+        self.push(Router::with_path(path).handle_impl(method, f, 4))
     }
 
     /// Global middleware (inherited by children)
     #[inline(never)]
     pub fn middleware<F>(mut self, f: F) -> Self
     where
-        for<'a> F: AsyncFn3<&'a mut Request, &'a mut Response, Next, Output = HandlerOutput>
-            + Send
-            + Sync
-            + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
     {
-        self.global_middlewares
-            .push(Arc::new(HandlerWrapper::new(f, "Global")));
+        let handler = Arc::new(HandlerWrapper::new(
+            f,
+            HandlerType::Middleware { is_global: true },
+            3,
+        ));
+        self.items.push(RouterItem::Handler(handler));
         self
     }
 
@@ -101,31 +109,14 @@ impl Router {
     #[inline(never)]
     pub fn local_middleware<F>(mut self, f: F) -> Self
     where
-        for<'a> F: AsyncFn3<&'a mut Request, &'a mut Response, Next, Output = HandlerOutput>
-            + Send
-            + Sync
-            + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
     {
-        self.local_middlewares
-            .push(Arc::new(HandlerWrapper::new(f, "Local")));
-        self
-    }
-
-    #[inline(never)]
-    pub fn all<F>(mut self, f: F) -> Self
-    where
-        for<'a> F: AsyncFn2<&'a mut Request, &'a mut Response, Output = HandlerOutput>
-            + Send
-            + Sync
-            + 'static,
-    {
-        assert!(
-            self.all_handler.is_none(),
-            "All handler already exists on path {}",
-            self.path
-        );
-        let f = Arc::new(HandlerWrapper::new(f, ""));
-        self.all_handler = Some(f);
+        let handler = Arc::new(HandlerWrapper::new(
+            f,
+            HandlerType::Middleware { is_global: false },
+            3,
+        ));
+        self.items.push(RouterItem::Handler(handler));
         self
     }
 
@@ -134,6 +125,7 @@ impl Router {
         let mut match_router = matchit::Router::new();
 
         for (path, handlers) in self.flatten_routers() {
+            mark_get_as_head(&handlers);
             match_router.insert(path, Arc::from(handlers))?;
         }
 
@@ -141,9 +133,9 @@ impl Router {
     }
 
     #[inline(never)]
-    fn flatten_routers(&self) -> Vec<(String, Handlers)> {
+    fn flatten_routers(&self) -> Vec<(String, Vec<Handler>)> {
         let mut out = Vec::new();
-        Self::walk("", self, &Handlers::default(), &mut out);
+        Self::walk("", self, &[], &mut out);
         out
     }
 
@@ -151,35 +143,44 @@ impl Router {
     fn walk(
         base: &str,
         router: &Router,
-        inherited_mw: &Handlers,
-        out: &mut Vec<(String, Handlers)>,
+        inherited_mw: &[Handler],
+        out: &mut Vec<(String, Vec<Handler>)>,
     ) {
         let path = join_paths(base, &router.path);
 
-        let mut next_inherited = inherited_mw.clone();
-        next_inherited
-            .middlewares
-            .extend(router.global_middlewares.iter().cloned());
+        let mut local_handlers = Vec::new();
+        let mut new_global_mw = Vec::new();
+        let mut next_inherited = inherited_mw.to_vec();
 
-        if router.handler.is_empty() && !router.local_middlewares.is_empty() {
-            tracing::warn!("Route {path} has local middlewares but no handlers!");
+        // Process items in order
+        for item in &router.items {
+            match item {
+                RouterItem::Handler(h) => match h.handler_type() {
+                    HandlerType::Middleware { is_global } => {
+                        if *is_global {
+                            new_global_mw.push(h.clone());
+                            next_inherited.push(h.clone());
+                        } else {
+                            local_handlers.push(h.clone());
+                        }
+                    }
+                    HandlerType::Method { .. } => {
+                        local_handlers.push(h.clone());
+                    }
+                },
+                RouterItem::Child(child) => {
+                    // Process child with inherited middlewares
+                    Self::walk(&path, child, &next_inherited, out);
+                }
+            }
         }
 
-        if !router.handler.is_empty() || router.all_handler.is_some() {
-            // Order: global (inherited + this), local then handlers
-            let mut handlers = next_inherited.clone();
-            handlers
-                .middlewares
-                .extend(router.local_middlewares.iter().cloned());
-
-            handlers.methods = router.handler.clone();
-            handlers.all = router.all_handler.clone();
-
-            out.push((path.clone(), handlers));
-        }
-
-        for child in &router.children {
-            Self::walk(&path, child, &next_inherited, out);
+        // Only push if we have local handlers or new global middleware
+        if !local_handlers.is_empty() || !new_global_mw.is_empty() {
+            let mut final_handlers = inherited_mw.to_vec();
+            final_handlers.extend(new_global_mw);
+            final_handlers.extend(local_handlers);
+            out.push((path, final_handlers));
         }
     }
 
@@ -191,6 +192,26 @@ impl std::fmt::Debug for Router {
         writeln!(f, "{:#?}", self.flatten_routers())?;
 
         Ok(())
+    }
+}
+
+/// This is a simple way, to allow using GET handlers for HEAD requests
+/// by marking all GET handlers to also be used for HEAD.
+/// Their body will be ignored later in the request handling.
+#[inline(never)]
+fn mark_get_as_head(handlers: &[Handler]) {
+    let mut get_handler: Option<&Handler> = None;
+    for handler in handlers {
+        if let HandlerType::Method { method, .. } = handler.handler_type() {
+            match *method {
+                Method::HEAD => return, // Early exit if HEAD exists
+                Method::GET => get_handler = Some(handler),
+                _ => {}
+            }
+        }
+    }
+    if let Some(get) = get_handler {
+        get.set_use_as_head(true);
     }
 }
 
@@ -212,12 +233,12 @@ macro_rules! method_handlers {
                 #[inline(never)]
                 pub fn [<$method:lower>]<F>(self, f: F) -> Self
                 where
-                    for<'a> F: AsyncFn2<&'a mut Request, &'a mut Response, Output = HandlerOutput>
+                    for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput>
                         + Send
                         + Sync
                         + 'static,
                 {
-                    self.handle(Method::$method, f)
+                    self.handle_impl(Method::$method, f, 4)
                 }
             }
         )*

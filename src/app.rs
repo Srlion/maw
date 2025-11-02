@@ -14,7 +14,6 @@ use smol_str::SmolStr;
 use tokio::net::TcpListener;
 
 use crate::locals::Locals;
-use crate::next;
 use crate::request::Request;
 use crate::response::Response;
 use crate::{
@@ -149,26 +148,18 @@ async fn handle_request(
     request: HyperRequest<IncomingBody>,
 ) -> Result<HttpResponse, Infallible> {
     let mut response = HttpResponse::new(HttpBody::default());
+    *response.status_mut() = StatusCode::NOT_FOUND;
 
     let path = handle_path_slashes(request.uri().path().as_bytes());
     let matched_route = match router.at(&path) {
         Ok(matched_route) => matched_route,
         Err(_) => {
             tracing::debug!("requested path not found: {path}");
-            *response.status_mut() = StatusCode::NOT_FOUND;
             return Ok(response);
         }
     };
 
     let handlers = matched_route.value;
-    if !handlers.methods.contains_key(request.method()) && handlers.all.is_none() {
-        tracing::debug!(
-            "path is found, but no handler exists for method: {path} {}",
-            request.method()
-        );
-        *response.status_mut() = StatusCode::NOT_FOUND;
-        return Ok(response);
-    }
 
     let params = matched_route
         .params
@@ -176,19 +167,23 @@ async fn handle_request(
         .map(|(k, v)| (SmolStr::new(k), SmolStr::new(v)))
         .collect();
 
-    let mut req = Request::new(app.clone(), request, params, handlers.clone());
-    let mut res = Response::from_response(app, response);
+    let req = Request::new(app.clone(), request, params);
+    let res = Response::from_response(app, response);
+    let mut ctx = crate::ctx::Ctx::new(req, res, handlers.clone());
 
-    let out = next::NEXT(&mut req, &mut res).await;
-    match out {
+    match ctx.next().await {
         Ok(()) => {}
         Err(e) => {
-            *res.inner.status_mut() = e.code;
-            *res.inner.body_mut() = e.brief.into();
+            *ctx.res.inner.status_mut() = e.code;
+            *ctx.res.inner.body_mut() = e.brief.into();
         }
     }
 
-    Ok(res.inner)
+    if ctx.req.method() == http::Method::HEAD {
+        *ctx.res.inner.body_mut() = HttpBody::default();
+    }
+
+    Ok(ctx.res.inner)
 }
 
 fn handle_path_slashes(path_bytes: &[u8]) -> SmolStr {

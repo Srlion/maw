@@ -17,6 +17,8 @@ pub struct Response {
     pub(crate) app: Arc<App>,
     pub(crate) inner: http::response::Response<HttpBody>,
     pub(crate) locals: Locals,
+    // Indicates if the status code has been modified by the user
+    pub(crate) status_modified: bool,
 }
 
 impl Response {
@@ -26,6 +28,7 @@ impl Response {
             app,
             inner: res,
             locals: Locals::new(),
+            status_modified: false,
         }
     }
 
@@ -35,13 +38,16 @@ impl Response {
 
     /// Sets the HTTP status for the response.
     pub fn status(&mut self, status: StatusCode) -> &mut Self {
+        if !self.status_modified {
+            self.status_modified = true;
+        }
         *self.inner.status_mut() = status;
         self
     }
 
     /// Sets the status code and the correct status message in the body if the response body is **empty**.
     pub fn send_status(&mut self, status: StatusCode) -> &mut Self {
-        *self.inner.status_mut() = status;
+        self.status(status);
 
         if self.inner.body().size_hint().exact() == Some(0) {
             *self.inner.body_mut() = status.canonical_reason().unwrap_or("").into();

@@ -11,15 +11,13 @@ use serde::{
 };
 use smol_str::SmolStr;
 
-use crate::{app::App, error::Error, locals::Locals, router::Handlers};
+use crate::{app::App, error::Error, locals::Locals};
 
 pub struct Request {
+    pub(crate) app: Arc<App>,
     pub(crate) parts: http::request::Parts,
     pub(crate) body: IncomingBody,
     pub params: HashMap<SmolStr, SmolStr>,
-    pub(crate) handlers: Arc<Handlers>,
-    pub(crate) index_handler: usize,
-    pub(crate) app: Arc<App>,
     pub(crate) locals: Locals,
 }
 
@@ -29,7 +27,6 @@ impl Request {
         app: Arc<App>,
         request: http::Request<IncomingBody>,
         params: HashMap<SmolStr, SmolStr>,
-        handlers: Arc<Handlers>,
     ) -> Self {
         let (parts, body) = request.into_parts();
         Request {
@@ -37,8 +34,6 @@ impl Request {
             parts,
             body,
             params,
-            handlers,
-            index_handler: 0,
             locals: Locals::new(),
         }
     }

@@ -21,8 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new();
 
     let router = Router::new()
-        .get(async |_req: &mut Request, res: &mut Response| {
-            res.send("Hello, world!");
+        .get(async |ctx: &mut Ctx| {
+            ctx.res.send("Hello, world!");
             Ok(())
         });
 

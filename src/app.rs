@@ -186,15 +186,9 @@ async fn handle_request(
 
     let req = Request::new(app.clone(), request, params);
     let res = Response::from_response(app, response);
-    let mut ctx = crate::ctx::Ctx::new(req, res, handlers.clone());
 
-    match ctx.next().await {
-        Ok(()) => {}
-        Err(e) => {
-            *ctx.res.inner.status_mut() = e.code;
-            *ctx.res.inner.body_mut() = e.brief.into();
-        }
-    }
+    let mut ctx = crate::ctx::Ctx::new(req, res, handlers.clone());
+    ctx.next().await;
 
     if ctx.req.method() == http::Method::HEAD {
         *ctx.res.inner.body_mut() = HttpBody::default();

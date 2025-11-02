@@ -5,7 +5,8 @@ use http::Method;
 use crate::{
     async_fn::AsyncFn1,
     ctx::Ctx,
-    handler::{Handler, HandlerOutput, HandlerType, HandlerWrapper},
+    handler::{Handler, HandlerType, HandlerWrapper},
+    into_response::IntoResponse,
 };
 
 pub(crate) type MatchRouter = Arc<matchit::Router<Arc<[Handler]>>>;
@@ -47,9 +48,10 @@ impl Router {
     }
 
     #[inline(never)]
-    fn handle_impl<F>(mut self, method: Method, f: F, skip: usize) -> Self
+    fn handle_impl<F, R>(mut self, method: Method, f: F, skip: usize) -> Self
     where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
     {
         for item in &self.items {
             if let RouterItem::Handler(existing) = item
@@ -75,26 +77,29 @@ impl Router {
     }
 
     #[inline(never)]
-    pub fn handle<F>(self, method: Method, f: F) -> Self
+    pub fn handle<F, R>(self, method: Method, f: F) -> Self
     where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
     {
         self.handle_impl(method, f, 4)
     }
 
     #[inline(never)]
-    pub fn route<F>(self, method: Method, path: impl Into<String>, f: F) -> Self
+    pub fn route<F, R>(self, method: Method, path: impl Into<String>, f: F) -> Self
     where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
     {
         self.push(Router::with_path(path).handle_impl(method, f, 4))
     }
 
     /// Global middleware (inherited by children)
     #[inline(never)]
-    pub fn middleware<F>(mut self, f: F) -> Self
+    pub fn middleware<F, R>(mut self, f: F) -> Self
     where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
     {
         let handler = Arc::new(HandlerWrapper::new(
             f,
@@ -107,9 +112,10 @@ impl Router {
 
     /// Local middleware (only for this route, not inherited by children)
     #[inline(never)]
-    pub fn local_middleware<F>(mut self, f: F) -> Self
+    pub fn local_middleware<F, R>(mut self, f: F) -> Self
     where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync + 'static,
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
     {
         let handler = Arc::new(HandlerWrapper::new(
             f,
@@ -231,12 +237,13 @@ macro_rules! method_handlers {
         $(
             paste::paste! {
                 #[inline(never)]
-                pub fn [<$method:lower>]<F>(self, f: F) -> Self
+                pub fn [<$method:lower>]<F, R>(self, f: F) -> Self
                 where
-                    for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput>
+                    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R>
                         + Send
                         + Sync
                         + 'static,
+                    R: IntoResponse + Send,
                 {
                     self.handle_impl(Method::$method, f, 4)
                 }

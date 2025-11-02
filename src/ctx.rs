@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    app::App,
-    handler::{Handler, HandlerOutput},
-    request::Request,
-    response::Response,
-};
+use crate::{app::App, handler::Handler, request::Request, response::Response};
 
 pub struct Ctx {
     pub req: Request,
@@ -29,7 +24,7 @@ impl Ctx {
         self.req.app()
     }
 
-    pub async fn next(&mut self) -> HandlerOutput {
+    pub async fn next(&mut self) {
         while let Some(handler) = self.handlers.get(self.index_handler) {
             self.index_handler += 1;
 
@@ -61,6 +56,5 @@ impl Ctx {
                 }
             }
         }
-        Ok(())
     }
 }

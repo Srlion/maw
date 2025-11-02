@@ -6,9 +6,7 @@ use std::{
 use async_trait::async_trait;
 use http::Method;
 
-use crate::{async_fn::AsyncFn1, ctx::Ctx, status_error::StatusError};
-
-pub type HandlerOutput = Result<(), StatusError>;
+use crate::{async_fn::AsyncFn1, ctx::Ctx, into_response::IntoResponse};
 
 pub type Handler = Arc<dyn HandlerRun>;
 
@@ -77,18 +75,20 @@ impl<F> Debug for HandlerWrapper<F> {
 
 #[async_trait]
 pub(crate) trait HandlerRun: Send + Sync + Debug {
-    async fn run(&self, ctx: &mut Ctx) -> HandlerOutput;
+    async fn run(&self, ctx: &mut Ctx);
     fn handler_type(&self) -> &HandlerType;
     fn set_use_as_head(&self, value: bool);
 }
 
 #[async_trait]
-impl<F> HandlerRun for HandlerWrapper<F>
+impl<F, R> HandlerRun for HandlerWrapper<F>
 where
-    for<'a> F: AsyncFn1<&'a mut Ctx, Output = HandlerOutput> + Send + Sync,
+    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync,
+    R: IntoResponse + Send,
 {
-    async fn run(&self, ctx: &mut Ctx) -> HandlerOutput {
-        (self.f)(ctx).await
+    async fn run(&self, ctx: &mut Ctx) {
+        let result = (self.f)(ctx).await;
+        result.into_response(ctx);
     }
 
     fn handler_type(&self) -> &HandlerType {

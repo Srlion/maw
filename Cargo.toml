@@ -6,27 +6,27 @@ edition = "2024"
 [dependencies]
 smallvec = "1"
 matchit = "0.9"
-walkdir = "2"
-chrono = "0.4"
 mime_guess = "2"
-async_fn_traits = "0.1"
 smol_str = "0.3"
 serde_urlencoded = "0.7"
-form_urlencoded = "1"
-serde_path_to_error = "0.1"
 backtrace = "0.3"
-hyper = { version = "1", features = ["http1", "server"] }
-hyper-util = { version = "0.1", features = [
-    "tokio",
-    "server",
-    "server-graceful",
-] }
 http-body-util = "0.1"
 tracing = "0.1"
 bytes = "1"
 thiserror = "2"
-sha2 = "0.10"
-tokio = { version = "1.48", features = ["full"] }
+tokio = { version = "1", features = ["macros", "signal", "net"] }
 http = "1"
-anyhow = { version = "1.0", features = ["backtrace"] }
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1", features = [] }
+hyper = { version = "1", features = [] }
+hyper-util = { version = "0.1", features = [
+    "server",
+    "server-graceful",
+    "http1",
+] }
+paste = "1"
+async-trait = "0.1"
+minijinja = { version = "2", features = ["loader"] }
+rustc-hash = "2"
+serde_json = "1"
+quick-xml = { version = "0.38", features = ["serialize"] }
+erased-serde = "0.4"

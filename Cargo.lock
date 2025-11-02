@@ -225,7 +225,7 @@ checksum = "9ea5f97102eb9e54ab99fb70bb175589073f554bdadfb74d9bd656482ea73e2a"
 
 [[package]]
 name = "maw"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "backtrace",

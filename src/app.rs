@@ -51,7 +51,7 @@ impl App {
     }
 
     /// Provides access to the application locals.
-    pub fn with_locals<F>(&mut self, f: F) -> &Self
+    pub fn with_locals<F>(&self, f: F) -> &Self
     where
         F: FnOnce(&Locals),
     {
@@ -70,12 +70,12 @@ impl App {
         self
     }
 
-    pub async fn listen<A>(self, addr: A) -> Result<(), Error>
+    pub async fn listen<A>(&self, addr: A) -> Result<(), Error>
     where
         A: net::ToSocketAddrs + std::fmt::Debug + 'static,
     {
         let router = self.router.build()?;
-        let arc_app = Arc::new(self);
+        let arc_app = Arc::new(self.clone());
 
         let addr = addr
             .to_socket_addrs()?

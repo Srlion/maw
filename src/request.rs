@@ -111,8 +111,9 @@ impl Request {
         &mut self.locals
     }
 
+    /// Returns the specified Header value as a &str.
     #[inline]
-    pub fn header<K>(&self, key: K) -> Option<&str>
+    pub fn get<K>(&self, key: K) -> Option<&str>
     where
         K: AsHeaderName,
     {
@@ -122,18 +123,6 @@ impl Request {
                 Ok(v) => v,
                 Err(_) => return None,
             }),
-            None => None,
-        }
-    }
-
-    #[inline]
-    pub fn header_bytes<K>(&self, key: K) -> Option<&[u8]>
-    where
-        K: AsHeaderName,
-    {
-        let v = self.headers().get(key);
-        match v {
-            Some(v) => Some(v.as_bytes()),
             None => None,
         }
     }

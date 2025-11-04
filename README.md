@@ -20,11 +20,34 @@ use maw::prelude::*;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new();
 
+    let router = Router::new().get("/", async |ctx: &mut Ctx| {
+        ctx.res.send("Hello, world!");
+        Ok(())
+    });
+
+    // to have it with middlewares, can be done like this:
     let router = Router::new()
-        .get(async |ctx: &mut Ctx| {
+        .middleware(async |ctx: &mut Ctx| {
+            ctx.next().await;
+        })
+        .get("/", async |ctx: &mut Ctx| {
             ctx.res.send("Hello, world!");
             Ok(())
         });
+
+    // or
+    let router = Router::new().get(
+        "/",
+        (
+            async |ctx: &mut Ctx| {
+                ctx.next().await;
+            },
+            async |ctx: &mut Ctx| {
+                ctx.res.send("Hello, world!");
+                Ok(())
+            },
+        ),
+    );
 
     app.router(router).listen("127.0.0.1:3000").await?;
     Ok(())

@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use http::Method;
@@ -11,27 +8,15 @@ use crate::{async_fn::AsyncFn1, ctx::Ctx, into_response::IntoResponse};
 pub type Handler = Arc<dyn HandlerRun>;
 
 pub(crate) enum HandlerType {
-    Middleware {
-        is_global: bool,
-    },
-    Method {
-        method: Method,
-        use_as_head: AtomicBool,
-    },
+    Middleware,
+    Method(Method),
 }
 
 impl std::fmt::Display for HandlerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HandlerType::Middleware { is_global } => {
-                // if global, print Middleware(Global), else Middleware(Local)
-                if *is_global {
-                    write!(f, "Middleware(Global)")
-                } else {
-                    write!(f, "Middleware(Local)")
-                }
-            }
-            HandlerType::Method { method, .. } => write!(f, "Method({})", method),
+            HandlerType::Middleware => write!(f, "Middleware"),
+            HandlerType::Method(method) => write!(f, "Method({method})"),
         }
     }
 }
@@ -44,13 +29,13 @@ pub(crate) struct HandlerWrapper<F> {
 }
 
 impl<F> HandlerWrapper<F> {
-    pub(crate) fn new(f: F, handler_type: HandlerType, skip: usize) -> Self {
+    pub(crate) fn new(f: F, handler_type: HandlerType, _skip: usize) -> Self {
         #[cfg(debug_assertions)]
         {
             Self {
                 f,
                 handler_type,
-                location: caller_location(skip),
+                location: caller_location(_skip),
             }
         }
         #[cfg(not(debug_assertions))]
@@ -77,7 +62,6 @@ impl<F> Debug for HandlerWrapper<F> {
 pub(crate) trait HandlerRun: Send + Sync + Debug {
     async fn run(&self, ctx: &mut Ctx);
     fn handler_type(&self) -> &HandlerType;
-    fn set_use_as_head(&self, value: bool);
 }
 
 #[async_trait]
@@ -93,24 +77,6 @@ where
 
     fn handler_type(&self) -> &HandlerType {
         &self.handler_type
-    }
-
-    fn set_use_as_head(&self, value: bool) {
-        match &self.handler_type {
-            HandlerType::Method {
-                method,
-                use_as_head,
-            } => {
-                if *method == Method::GET {
-                    use_as_head.store(value, std::sync::atomic::Ordering::SeqCst);
-                } else {
-                    panic!("can only set use_as_head on GET method handlers");
-                }
-            }
-            HandlerType::Middleware { .. } => {
-                panic!("cannot set use_as_head on a middleware handler")
-            }
-        }
     }
 }
 

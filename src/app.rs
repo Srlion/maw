@@ -13,6 +13,7 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 use tokio::net::TcpListener;
 
+use crate::ALL;
 use crate::locals::Locals;
 use crate::request::Request;
 use crate::response::Response;
@@ -165,18 +166,35 @@ async fn handle_request(
     request: HyperRequest<IncomingBody>,
 ) -> Result<HttpResponse, Infallible> {
     let mut response = HttpResponse::new(HttpBody::default());
-    *response.status_mut() = StatusCode::NOT_FOUND;
 
     let path = handle_path_slashes(request.uri().path().as_bytes());
     let matched_route = match router.at(&path) {
         Ok(matched_route) => matched_route,
         Err(_) => {
             tracing::debug!("requested path not found: {path}");
+            *response.status_mut() = StatusCode::NOT_FOUND;
             return Ok(response);
         }
     };
 
     let handlers = matched_route.value;
+    let handlers = handlers
+        .get(request.method())
+        .or_else(|| {
+            (request.method() == http::Method::HEAD)
+                .then(|| handlers.get(&http::Method::GET))
+                .flatten()
+        })
+        .or_else(|| handlers.get(&ALL));
+    let Some(handlers) = handlers else {
+        tracing::debug!(
+            "requested method not allowed: {} {}",
+            request.method(),
+            path
+        );
+        *response.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
+        return Ok(response);
+    };
 
     let params = matched_route
         .params

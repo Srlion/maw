@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use http::Method;
 
@@ -9,7 +12,9 @@ use crate::{
     into_response::IntoResponse,
 };
 
-pub(crate) type MatchRouter = Arc<matchit::Router<Arc<[Handler]>>>;
+pub type Handlers = HashMap<Method, Arc<[Handler]>>;
+
+pub(crate) type MatchRouter = Arc<matchit::Router<Handlers>>;
 
 #[derive(Clone)]
 pub(crate) enum RouterItem {
@@ -17,10 +22,12 @@ pub(crate) enum RouterItem {
     Child(Box<Router>),
 }
 
+// No actual need for interior mutability here, but just to make things easier for the user
+// It's not like this will be a performance bottleneck
 #[derive(Clone, Default)]
 pub struct Router {
     path: String,
-    items: Vec<RouterItem>,
+    items: Arc<Mutex<Vec<RouterItem>>>,
 }
 
 impl Router {
@@ -30,100 +37,66 @@ impl Router {
     }
 
     #[inline(never)]
-    pub fn push(mut self, router: Router) -> Self {
-        self.items.push(RouterItem::Child(Box::new(router)));
-        self
+    pub fn push(&self, router: Router) -> Self {
+        self.items
+            .lock()
+            .unwrap()
+            .push(RouterItem::Child(Box::new(router)));
+        self.clone()
     }
 
     #[inline(never)]
-    pub fn with_path(path: impl Into<String>) -> Self {
+    pub fn group(path: impl Into<String>) -> Self {
         let path = path.into();
         if path != "/" && (!path.starts_with('/') || path.ends_with('/')) {
             panic!("Path must start with / and not end with / - got {path}");
         }
         Self {
             path,
-            items: Vec::new(),
+            items: Arc::default(),
         }
     }
 
     #[inline(never)]
-    fn handle_impl<F, R>(mut self, method: Method, f: F, skip: usize) -> Self
+    fn handle<F, R>(&self, method: Method, f: F, skip: usize) -> Self
     where
         for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
         R: IntoResponse + Send,
     {
-        for item in &self.items {
-            if let RouterItem::Handler(existing) = item
-                && let HandlerType::Method {
-                    method: existing_method,
-                    ..
-                } = existing.handler_type()
-                && *existing_method == method
-            {
-                panic!("Handler for method {} already exists in this route", method);
-            }
-        }
-        let handler = Arc::new(HandlerWrapper::new(
-            f,
-            HandlerType::Method {
-                method,
-                use_as_head: AtomicBool::new(false),
-            },
-            skip,
-        ));
-        self.items.push(RouterItem::Handler(handler));
+        let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Method(method), skip));
+        self.items
+            .lock()
+            .unwrap()
+            .push(RouterItem::Handler(handler));
+        self.clone()
+    }
+
+    #[inline(never)]
+    pub fn add(&self, method: Method, path: impl Into<String>, handlers: impl AddHandlers) -> Self {
+        handlers.add_handlers(self, method, path, 5)
+    }
+
+    #[inline(never)]
+    fn middleware_impl<F, R>(&self, f: F, skip: usize) -> &Self
+    where
+        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
+    {
+        let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Middleware {}, skip));
+        self.items
+            .lock()
+            .unwrap()
+            .push(RouterItem::Handler(handler));
         self
     }
 
     #[inline(never)]
-    pub fn handle<F, R>(self, method: Method, f: F) -> Self
+    pub fn middleware<F, R>(&self, f: F) -> &Self
     where
         for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
         R: IntoResponse + Send,
     {
-        self.handle_impl(method, f, 4)
-    }
-
-    #[inline(never)]
-    pub fn route<F, R>(self, method: Method, path: impl Into<String>, f: F) -> Self
-    where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
-        R: IntoResponse + Send,
-    {
-        self.push(Router::with_path(path).handle_impl(method, f, 4))
-    }
-
-    /// Global middleware (inherited by children)
-    #[inline(never)]
-    pub fn middleware<F, R>(mut self, f: F) -> Self
-    where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
-        R: IntoResponse + Send,
-    {
-        let handler = Arc::new(HandlerWrapper::new(
-            f,
-            HandlerType::Middleware { is_global: true },
-            3,
-        ));
-        self.items.push(RouterItem::Handler(handler));
-        self
-    }
-
-    /// Local middleware (only for this route, not inherited by children)
-    #[inline(never)]
-    pub fn local_middleware<F, R>(mut self, f: F) -> Self
-    where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
-        R: IntoResponse + Send,
-    {
-        let handler = Arc::new(HandlerWrapper::new(
-            f,
-            HandlerType::Middleware { is_global: false },
-            3,
-        ));
-        self.items.push(RouterItem::Handler(handler));
-        self
+        self.middleware_impl(f, 4)
     }
 
     #[inline(never)]
@@ -131,16 +104,15 @@ impl Router {
         let mut match_router = matchit::Router::new();
 
         for (path, handlers) in self.flatten_routers() {
-            mark_get_as_head(&handlers);
-            match_router.insert(path, Arc::from(handlers))?;
+            match_router.insert(path, handlers)?;
         }
 
         Ok(Arc::new(match_router))
     }
 
     #[inline(never)]
-    fn flatten_routers(&self) -> Vec<(String, Vec<Handler>)> {
-        let mut out = Vec::new();
+    fn flatten_routers(&self) -> HashMap<String, Handlers> {
+        let mut out = HashMap::default();
         Self::walk("", self, &[], &mut out);
         out
     }
@@ -150,44 +122,63 @@ impl Router {
         base: &str,
         router: &Router,
         inherited_mw: &[Handler],
-        out: &mut Vec<(String, Vec<Handler>)>,
+        out: &mut HashMap<String, Handlers>,
     ) {
         let path = join_paths(base, &router.path);
 
-        let mut local_handlers = Vec::new();
-        let mut new_global_mw = Vec::new();
-        let mut next_inherited = inherited_mw.to_vec();
+        let mut method_handlers: HashMap<Method, Arc<[Handler]>> = HashMap::default();
+        let mut inherited_for_children = inherited_mw.to_vec(); // Only global middlewares for children
 
         // Process items in order
-        for item in &router.items {
+        for item in router.items.lock().unwrap().iter() {
             match item {
                 RouterItem::Handler(h) => match h.handler_type() {
-                    HandlerType::Middleware { is_global } => {
-                        if *is_global {
-                            new_global_mw.push(h.clone());
-                            next_inherited.push(h.clone());
-                        } else {
-                            local_handlers.push(h.clone());
-                        }
+                    HandlerType::Middleware => {
+                        inherited_for_children.push(h.clone());
                     }
-                    HandlerType::Method { .. } => {
-                        local_handlers.push(h.clone());
+                    HandlerType::Method(method) => {
+                        // Build the complete chain for this method with all middlewares seen so far
+                        let mut chain = inherited_for_children.clone();
+                        chain.push(h.clone());
+
+                        // Check for conflicts within this router
+                        if let Some(existing) = method_handlers.get(method) {
+                            panic!(
+                                "Handler for method {} already exists at path {}\nExisting: {:?}\nNew: {:?}",
+                                method, path, existing, h
+                            );
+                        }
+                        method_handlers.insert(method.clone(), Arc::from(chain.into_boxed_slice()));
                     }
                 },
                 RouterItem::Child(child) => {
-                    // Process child with inherited middlewares
-                    Self::walk(&path, child, &next_inherited, out);
+                    Self::walk(&path, child, &inherited_for_children, out);
                 }
             }
         }
 
-        // Only push if we have local handlers or new global middleware
-        if !local_handlers.is_empty() || !new_global_mw.is_empty() {
-            let mut final_handlers = inherited_mw.to_vec();
-            final_handlers.extend(new_global_mw);
-            final_handlers.extend(local_handlers);
-            out.push((path, final_handlers));
+        // Add to output if we have handlers
+        if !method_handlers.is_empty() {
+            // Check for conflicts when merging with existing handlers
+            let entry = out.entry(path.clone()).or_default();
+            for (method, new_handler_chain) in &method_handlers {
+                if let Some(existing_handler_chain) = entry.get(method) {
+                    panic!(
+                        "Handler for method {} already exists at path {}\nExisting: {:?}\nNew: {:?}",
+                        method,
+                        path,
+                        existing_handler_chain.last(),
+                        new_handler_chain.last()
+                    );
+                }
+            }
+            entry.extend(method_handlers);
         }
+    }
+
+    #[inline(never)]
+    pub fn all(&self, path: impl Into<String>, handlers: impl AddHandlers) -> Self {
+        handlers.add_handlers(self, crate::all(), path, 5)
     }
 
     method_handlers!(GET, POST, PUT, DELETE, HEAD, OPTIONS, CONNECT, PATCH, TRACE);
@@ -201,32 +192,13 @@ impl std::fmt::Debug for Router {
     }
 }
 
-/// This is a simple way, to allow using GET handlers for HEAD requests
-/// by marking all GET handlers to also be used for HEAD.
-/// Their body will be ignored later in the request handling.
-#[inline(never)]
-fn mark_get_as_head(handlers: &[Handler]) {
-    let mut get_handler: Option<&Handler> = None;
-    for handler in handlers {
-        if let HandlerType::Method { method, .. } = handler.handler_type() {
-            match *method {
-                Method::HEAD => return, // Early exit if HEAD exists
-                Method::GET => get_handler = Some(handler),
-                _ => {}
-            }
-        }
-    }
-    if let Some(get) = get_handler {
-        get.set_use_as_head(true);
-    }
-}
-
 #[inline(never)]
 fn join_paths(parent: &str, child: &str) -> String {
     match (parent, child) {
         ("", "") => "/".to_string(),
         ("", c) => c.to_string(),
         (p, "") => p.to_string(),
+        (p, "/") => p.to_string(),
         ("/", c) => c.to_string(),
         (p, c) => format!("{p}{c}"),
     }
@@ -237,19 +209,84 @@ macro_rules! method_handlers {
         $(
             paste::paste! {
                 #[inline(never)]
-                pub fn [<$method:lower>]<F, R>(self, f: F) -> Self
-                where
-                    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R>
-                        + Send
-                        + Sync
-                        + 'static,
-                    R: IntoResponse + Send,
+                pub fn [<$method:lower>](&self, path: impl Into<String>, handlers: impl AddHandlers) -> Self
                 {
-                    self.handle_impl(Method::$method, f, 4)
+                    handlers.add_handlers(self, Method::$method, path, 5)
                 }
             }
         )*
     };
 }
-
 use method_handlers;
+
+pub trait AddHandlers {
+    fn add_handlers(
+        self,
+        router: &Router,
+        method: Method,
+        path: impl Into<String>,
+        skip: usize,
+    ) -> Router;
+}
+
+impl<F, R> AddHandlers for F
+where
+    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+    R: IntoResponse + Send,
+{
+    fn add_handlers(
+        self,
+        router: &Router,
+        method: Method,
+        path: impl Into<String>,
+        skip: usize,
+    ) -> Router {
+        let group = Router::group(path);
+        let group = group.handle(method, self, skip);
+        router.push(group)
+    }
+}
+
+macro_rules! impl_add_handlers {
+    ($(($($f:ident, $r:ident),+; $last_f:ident, $last_r:ident)),+ $(,)?) => {
+        $(
+            impl<$($f, $r,)+ $last_f, $last_r> AddHandlers for ($($f,)+ $last_f,)
+            where
+                $(
+                    for<'a> $f: AsyncFn1<&'a mut Ctx, Output = $r> + Send + Sync + 'static,
+                    $r: IntoResponse + Send,
+                )+
+                for<'a> $last_f: AsyncFn1<&'a mut Ctx, Output = $last_r> + Send + Sync + 'static,
+                $last_r: IntoResponse + Send,
+            {
+                fn add_handlers(
+                    self,
+                    router: &Router,
+                    method: Method,
+                    path: impl Into<String>,
+                    skip: usize,
+                ) -> Router {
+                    #[allow(non_snake_case)]
+                    let ($($f,)+ $last_f,) = self;
+                    router.push(
+                        Router::group(path)
+                            $(.middleware_impl($f, skip))+
+                            .handle(method, $last_f, skip)
+                    )
+                }
+            }
+        )+
+    };
+}
+
+impl_add_handlers! {
+    (F1, R1; F2, R2),
+    (F1, R1, F2, R2; F3, R3),
+    (F1, R1, F2, R2, F3, R3; F4, R4),
+    (F1, R1, F2, R2, F3, R3, F4, R4; F5, R5),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5; F6, R6),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6; F7, R7),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7; F8, R8),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8; F9, R9),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8, F9, R9; F10, R10),
+}

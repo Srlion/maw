@@ -46,7 +46,7 @@ impl App {
         self
     }
 
-    pub fn views(mut self, path: &str) -> Self {
+    pub fn views(mut self, path: impl AsRef<std::path::Path>) -> Self {
         self.render_env.set_loader(path_loader(path));
         self
     }

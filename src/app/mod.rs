@@ -165,7 +165,7 @@ async fn handle_request(
     let matched_route = match app.built_router.at(&path) {
         Ok(matched_route) => matched_route,
         Err(_) => {
-            tracing::debug!("{} requested path not found: {path}", 1);
+            tracing::debug!("requested path not found: {path}");
             *response.status_mut() = StatusCode::NOT_FOUND;
             return Ok(response);
         }

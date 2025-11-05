@@ -14,7 +14,7 @@ use crate::{
 
 pub type Handlers = HashMap<Method, Arc<[Handler]>>;
 
-pub(crate) type MatchRouter = Arc<matchit::Router<Handlers>>;
+pub(crate) type MatchRouter = matchit::Router<Handlers>;
 
 #[derive(Clone)]
 pub(crate) enum RouterItem {
@@ -107,7 +107,7 @@ impl Router {
             match_router.insert(path, handlers)?;
         }
 
-        Ok(Arc::new(match_router))
+        Ok(match_router)
     }
 
     #[inline(never)]

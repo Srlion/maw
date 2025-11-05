@@ -13,6 +13,8 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 use tokio::net::TcpListener;
 
+pub(crate) mod config;
+
 use crate::ALL;
 use crate::locals::Locals;
 use crate::request::Request;
@@ -30,12 +32,18 @@ pub struct App {
     pub(crate) router: router::Router,
     pub(crate) render_env: minijinja::Environment<'static>,
     pub(crate) locals: Mutex<Locals>,
-    pub(crate) body_limit: usize,
+    pub(crate) built_router: MatchRouter,
+    pub(crate) config: config::Config,
 }
 
 impl App {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn config(mut self, config: config::Config) -> Self {
+        self.config = config;
+        self
     }
 
     /// Sets the router for the application.
@@ -48,21 +56,6 @@ impl App {
 
     pub fn views(mut self, path: impl AsRef<std::path::Path>) -> Self {
         self.render_env.set_loader(path_loader(path));
-        self
-    }
-
-    /// Gets the body limit for the application.
-    ///
-    /// Default is 4MB.
-    pub fn body_limit(&self) -> usize {
-        self.body_limit
-    }
-
-    /// Sets the body limit for the application.
-    ///
-    /// Default is 4MB.
-    pub fn set_body_limit(&mut self, limit: usize) -> &mut Self {
-        self.body_limit = limit;
         self
     }
 
@@ -86,11 +79,11 @@ impl App {
         self
     }
 
-    pub async fn listen<A>(self, addr: A) -> Result<(), Error>
+    pub async fn listen<A>(mut self, addr: A) -> Result<(), Error>
     where
         A: net::ToSocketAddrs + std::fmt::Debug + 'static,
     {
-        let router = self.router.build()?;
+        self.built_router = self.router.build()?;
         let arc_app = Arc::new(self);
 
         let addr = addr
@@ -107,9 +100,9 @@ impl App {
 
         loop {
             tokio::select! {
-                Ok((stream, _)) = listener.accept() => {
+                Ok((stream, peer_addr)) = listener.accept() => {
                     let io = TokioIo::new(stream);
-                    let conn = http.serve_connection(io, ConnectionHandler { app: arc_app.clone(), router: router.clone() });
+                    let conn = http.serve_connection(io, ConnectionHandler { app: arc_app.clone(), peer_addr });
                     // Watch this connection
                     let fut = graceful.watch(conn);
 
@@ -149,7 +142,8 @@ impl Clone for App {
             router: self.router.clone(),
             render_env: self.render_env.clone(),
             locals: Mutex::new(self.locals.lock().unwrap().clone()),
-            body_limit: 4 * 1024 * 1024, // 4MB default
+            built_router: MatchRouter::default(),
+            config: self.config.clone(),
         }
     }
 }
@@ -161,17 +155,17 @@ async fn shutdown_signal() {
 }
 
 async fn handle_request(
-    app: Arc<App>,
-    router: MatchRouter,
     request: HyperRequest<IncomingBody>,
+    app: Arc<App>,
+    peer_addr: net::SocketAddr,
 ) -> Result<HttpResponse, Infallible> {
     let mut response = HttpResponse::new(HttpBody::default());
 
     let path = handle_path_slashes(request.uri().path().as_bytes());
-    let matched_route = match router.at(&path) {
+    let matched_route = match app.built_router.at(&path) {
         Ok(matched_route) => matched_route,
         Err(_) => {
-            tracing::debug!("requested path not found: {path}");
+            tracing::debug!("{} requested path not found: {path}", 1);
             *response.status_mut() = StatusCode::NOT_FOUND;
             return Ok(response);
         }
@@ -195,6 +189,7 @@ async fn handle_request(
         *response.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
         return Ok(response);
     };
+    let handlers = handlers.clone();
 
     let params = matched_route
         .params
@@ -202,10 +197,10 @@ async fn handle_request(
         .map(|(k, v)| (SmolStr::new(k), SmolStr::new(v)))
         .collect();
 
-    let req = Request::new(app.clone(), request, params);
+    let req = Request::new(app.clone(), request, params, peer_addr);
     let res = Response::from_response(app, response);
 
-    let mut ctx = crate::ctx::Ctx::new(req, res, handlers.clone());
+    let mut ctx = crate::ctx::Ctx::new(req, res, handlers);
     ctx.next().await;
 
     if ctx.req.method() == http::Method::HEAD {
@@ -247,7 +242,8 @@ fn handle_path_slashes(path_bytes: &[u8]) -> SmolStr {
 
 struct ConnectionHandler {
     app: Arc<App>,
-    router: MatchRouter,
+    // The peer address of the connection
+    peer_addr: std::net::SocketAddr,
 }
 
 impl hyper::service::Service<HyperRequest<IncomingBody>> for ConnectionHandler {
@@ -257,6 +253,6 @@ impl hyper::service::Service<HyperRequest<IncomingBody>> for ConnectionHandler {
 
     #[inline]
     fn call(&self, req: HyperRequest<IncomingBody>) -> Self::Future {
-        Box::pin(handle_request(self.app.clone(), self.router.clone(), req))
+        Box::pin(handle_request(req, self.app.clone(), self.peer_addr))
     }
 }

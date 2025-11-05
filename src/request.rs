@@ -18,8 +18,9 @@ pub struct Request {
     pub(crate) parts: http::request::Parts,
     pub(crate) body: IncomingBody,
     pub params: HashMap<SmolStr, SmolStr>,
-    pub(crate) locals: Locals,
+    pub locals: Locals,
     pub(crate) body_bytes: Option<Bytes>,
+    pub(crate) ip: std::net::SocketAddr,
 }
 
 impl Request {
@@ -28,6 +29,7 @@ impl Request {
         app: Arc<App>,
         request: http::Request<IncomingBody>,
         params: HashMap<SmolStr, SmolStr>,
+        peer_addr: std::net::SocketAddr,
     ) -> Self {
         let (parts, body) = request.into_parts();
         Request {
@@ -37,17 +39,13 @@ impl Request {
             params,
             locals: Locals::new(),
             body_bytes: None,
+            ip: peer_addr,
         }
     }
 
     #[inline]
     pub fn app(&self) -> &App {
         &self.app
-    }
-
-    #[inline]
-    pub fn params(&self) -> &HashMap<SmolStr, SmolStr> {
-        &self.params
     }
 
     #[inline]
@@ -101,16 +99,6 @@ impl Request {
         &mut self.parts.headers
     }
 
-    #[inline]
-    pub fn locals(&self) -> &Locals {
-        &self.locals
-    }
-
-    #[inline]
-    pub fn locals_mut(&mut self) -> &mut Locals {
-        &mut self.locals
-    }
-
     /// Returns the specified Header value as a &str.
     #[inline]
     pub fn get<K>(&self, key: K) -> Option<&str>
@@ -142,7 +130,7 @@ impl Request {
         if let Some(ref bytes) = self.body_bytes {
             return Ok(bytes);
         }
-        let limit = limit.unwrap_or_else(|| self.app.body_limit());
+        let limit = limit.unwrap_or_else(|| self.app.config.body_limit);
         let limited = http_body_util::Limited::new(&mut self.body, limit);
         let collected = limited.collect().await.map_err(Error::BodyCollect)?;
         let bytes = collected.to_bytes();
@@ -218,6 +206,24 @@ impl Request {
     #[inline]
     pub fn size_hint(&self) -> hyper::body::SizeHint {
         hyper::body::Body::size_hint(&self.body)
+    }
+
+    #[inline]
+    fn extract_ip_from_header(&self, header_name: &str) -> String {
+        self.get(header_name).unwrap_or_default().to_string()
+    }
+
+    #[inline]
+    pub fn ip(&self) -> String {
+        if !self.app.config.proxy_header.is_empty() {
+            return self.extract_ip_from_header(&self.app.config.proxy_header);
+        }
+        self.ip.to_string()
+    }
+
+    #[inline]
+    pub fn is_from_local(&self) -> bool {
+        self.ip.ip().is_loopback()
     }
 
     // #[inline]

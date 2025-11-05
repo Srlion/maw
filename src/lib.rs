@@ -33,3 +33,4 @@ pub mod prelude {
 }
 
 pub use crate::into_response::IntoResponse;
+pub use app::config::Config;

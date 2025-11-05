@@ -1,0 +1,90 @@
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde_json::Value;
+
+use crate::{ctx::Ctx, error::Error};
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Session {
+    data: HashMap<String, Value>,
+    #[serde(skip)]
+    modified: bool,
+}
+
+impl Session {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get a value from the session
+    pub fn get<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
+        self.data
+            .get(key)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+    }
+
+    /// Set a value in the session
+    pub fn set<T: Serialize>(&mut self, key: impl Into<String>, value: T) -> Result<(), Error> {
+        let value = serde_json::to_value(value)?;
+        self.data.insert(key.into(), value);
+        self.modified = true;
+        Ok(())
+    }
+
+    /// Remove a value from the session
+    pub fn remove(&mut self, key: &str) -> Option<Value> {
+        self.modified = true;
+        self.data.remove(key)
+    }
+
+    /// Clear all session data
+    pub fn clear(&mut self) {
+        self.data.clear();
+        self.modified = true;
+    }
+
+    /// Check if the session has been modified
+    pub fn is_modified(&self) -> bool {
+        self.modified
+    }
+
+    /// Check if a key exists in the session
+    pub fn contains(&self, key: &str) -> bool {
+        self.data.contains_key(key)
+    }
+
+    /// Get all keys in the session
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
+        self.data.keys()
+    }
+}
+
+/// Has to be used after cookie middleware
+pub async fn middleware(c: &mut Ctx) {
+    // Load session from cookie
+    {
+        let session_config = &c.app().config.session;
+        let session = c
+            .get_cookie::<Session>(&session_config.cookie_name, session_config.cookie_type)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+
+        c.session = session;
+    }
+
+    c.next().await;
+
+    // Save session to cookie if modified
+    if c.session.is_modified() {
+        let session_config = &c.app().config.session;
+        let cookie_name = &session_config.cookie_name.clone();
+        let cookie_type = session_config.cookie_type;
+        let cookie_options = session_config.cookie_options.clone();
+        let session = std::mem::take(&mut c.session);
+        if let Err(e) = c.set_cookie(cookie_name, &session, cookie_type, Some(cookie_options)) {
+            tracing::error!("failed to set session cookie: {}", e);
+        }
+    }
+}

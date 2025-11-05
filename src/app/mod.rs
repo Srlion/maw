@@ -200,14 +200,14 @@ async fn handle_request(
     let req = Request::new(app.clone(), request, params, peer_addr);
     let res = Response::from_response(app, response);
 
-    let mut ctx = crate::ctx::Ctx::new(req, res, handlers);
-    ctx.next().await;
+    let mut c = crate::ctx::Ctx::new(req, res, handlers);
+    c.next().await;
 
-    if ctx.req.method() == http::Method::HEAD {
-        *ctx.res.inner.body_mut() = HttpBody::default();
+    if c.req.method() == http::Method::HEAD {
+        *c.res.inner.body_mut() = HttpBody::default();
     }
 
-    Ok(ctx.res.inner)
+    Ok(c.res.inner)
 }
 
 fn handle_path_slashes(path_bytes: &[u8]) -> SmolStr {

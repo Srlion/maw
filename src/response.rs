@@ -145,7 +145,7 @@ impl Response {
     }
 
     #[inline]
-    fn render_template(&mut self, template: &str, ctx: Value) -> &mut Self {
+    fn render_template(&mut self, template: &str, c: Value) -> &mut Self {
         let template = match self.app.render_env.get_template(template) {
             Ok(t) => t,
             Err(_) => {
@@ -154,7 +154,7 @@ impl Response {
             }
         };
 
-        let rendered = match template.render(&ctx) {
+        let rendered = match template.render(&c) {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!("failed to render template {}: {}", template.name(), e);

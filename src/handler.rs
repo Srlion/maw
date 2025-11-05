@@ -60,7 +60,7 @@ impl<F> Debug for HandlerWrapper<F> {
 
 #[async_trait]
 pub(crate) trait HandlerRun: Send + Sync + Debug {
-    async fn run(&self, ctx: &mut Ctx);
+    async fn run(&self, c: &mut Ctx);
     fn handler_type(&self) -> &HandlerType;
 }
 
@@ -70,9 +70,9 @@ where
     for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync,
     R: IntoResponse + Send,
 {
-    async fn run(&self, ctx: &mut Ctx) {
-        let result = (self.f)(ctx).await;
-        result.into_response(ctx);
+    async fn run(&self, c: &mut Ctx) {
+        let result = (self.f)(c).await;
+        result.into_response(c);
     }
 
     fn handler_type(&self) -> &HandlerType {

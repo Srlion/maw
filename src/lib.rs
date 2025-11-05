@@ -4,6 +4,8 @@ pub use hyper;
 
 mod app;
 mod async_fn;
+#[cfg(feature = "cookie")]
+pub mod cookie;
 mod ctx;
 mod error;
 mod handler;
@@ -13,6 +15,8 @@ mod request;
 mod response;
 mod router;
 mod serializable_any;
+#[cfg(feature = "session")]
+pub mod session;
 mod status_error;
 
 pub fn all() -> http::Method {

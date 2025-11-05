@@ -184,6 +184,23 @@ impl Response {
         };
         self.render_template(template, final_ctx)
     }
+
+    /// Redirects to the specified location with an optional status code.
+    /// If no status is provided, defaults to 302 Found.
+    pub fn redirect(
+        &mut self,
+        location: impl AsRef<str>,
+        status: Option<StatusCode>,
+    ) -> Result<&mut Self, Error> {
+        // Set the Location header
+        self.set((header::LOCATION, location.as_ref()))?;
+
+        // Set status code (default to 302 Found)
+        let status_code = status.unwrap_or(StatusCode::FOUND);
+        self.status(status_code);
+
+        Ok(self)
+    }
 }
 
 impl fmt::Debug for Response {

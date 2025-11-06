@@ -11,6 +11,8 @@ mod error;
 mod handler;
 mod into_response;
 mod locals;
+#[cfg(feature = "logging")]
+pub mod logging;
 mod request;
 mod response;
 mod router;
@@ -38,3 +40,5 @@ pub mod prelude {
 
 pub use crate::into_response::IntoResponse;
 pub use app::config::Config;
+#[cfg(feature = "session")]
+pub use session::SessionConfig;

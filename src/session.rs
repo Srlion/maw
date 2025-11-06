@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
-use crate::{ctx::Ctx, error::Error};
+use crate::{
+    cookie::{CookieOptions, CookieType},
+    ctx::Ctx,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Session {
@@ -25,11 +28,16 @@ impl Session {
     }
 
     /// Set a value in the session
-    pub fn set<T: Serialize>(&mut self, key: impl Into<String>, value: T) -> Result<(), Error> {
-        let value = serde_json::to_value(value)?;
+    pub fn set<T: Serialize>(&mut self, key: impl Into<String>, value: T) {
+        let value = match serde_json::to_value(value) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("failed to serialize session value: {}", e);
+                return;
+            }
+        };
         self.data.insert(key.into(), value);
         self.modified = true;
-        Ok(())
     }
 
     /// Remove a value from the session
@@ -83,8 +91,63 @@ pub async fn middleware(c: &mut Ctx) {
         let cookie_type = session_config.cookie_type;
         let cookie_options = session_config.cookie_options.clone();
         let session = std::mem::take(&mut c.session);
-        if let Err(e) = c.set_cookie(cookie_name, &session, cookie_type, Some(cookie_options)) {
-            tracing::error!("failed to set session cookie: {}", e);
+        c.set_cookie(cookie_name, &session, cookie_type, Some(cookie_options));
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SessionConfig {
+    /// Name of the session cookie
+    ///
+    /// Default: "maw.session"
+    cookie_name: String,
+
+    /// Cookie Type for the session cookie
+    cookie_type: CookieType,
+
+    /// Cookie options for the session cookie
+    cookie_options: CookieOptions,
+}
+
+impl SessionConfig {
+    /// Create a new SessionConfig with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the name of the session cookie
+    ///
+    /// Default: "maw.session"
+    pub fn cookie_name(mut self, name: impl Into<String>) -> Self {
+        self.cookie_name = name.into();
+        self
+    }
+
+    /// Set the cookie type for the session cookie
+    ///
+    /// Default: CookieType::Signed
+    pub fn cookie_type(mut self, cookie_type: CookieType) -> Self {
+        self.cookie_type = cookie_type;
+        self
+    }
+
+    /// Set the cookie options for the session cookie
+    pub fn cookie_options(mut self, options: CookieOptions) -> Self {
+        self.cookie_options = options;
+        self
+    }
+}
+
+impl Default for SessionConfig {
+    fn default() -> Self {
+        Self {
+            cookie_name: "maw.session".to_string(),
+            cookie_type: CookieType::Signed,
+            cookie_options: CookieOptions::new()
+                .path("/")
+                .http_only(true)
+                .secure(true)
+                .same_site(cookie::SameSite::Lax),
         }
     }
 }

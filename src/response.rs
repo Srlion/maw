@@ -16,7 +16,7 @@ pub type HttpResponse<T = HttpBody> = http::Response<T>;
 pub struct Response {
     pub(crate) app: Arc<App>,
     pub(crate) inner: http::response::Response<HttpBody>,
-    pub(crate) locals: Locals,
+    pub locals: Locals,
     // Indicates if the status code has been modified by the user
     pub(crate) status_modified: bool,
 }
@@ -72,12 +72,14 @@ impl Response {
     /// - A Vec of tuples: `res.set(vec![...])?`
     /// - A HashMap: `res.set(hashmap)?`
     #[inline]
-    pub fn set<H>(&mut self, headers: H) -> Result<&mut Self, Error>
+    pub fn set<H>(&mut self, headers: H) -> &mut Self
     where
         H: SetIntoHeaders,
     {
-        headers.into_headers(self.inner.headers_mut())?;
-        Ok(self)
+        if let Err(e) = headers.into_headers(self.inner.headers_mut()) {
+            tracing::error!("failed to set headers: {}", e);
+        }
+        self
     }
 
     /// Appends a value to the HTTP response header field.
@@ -90,15 +92,23 @@ impl Response {
     /// res.append("Warning", vec!["199 Miscellaneous warning"])?;
     /// ```
     #[inline]
-    pub fn append<K, V>(&mut self, key: K, values: V) -> Result<&mut Self, Error>
+    pub fn append<K, V>(&mut self, key: K, values: V) -> &mut Self
     where
         K: TryInto<HeaderName, Error = InvalidHeaderName>,
         V: AppendIntoHeaderValues,
         Error: From<K::Error>,
     {
-        let key = key.try_into()?;
-        values.append_to_header(self.inner.headers_mut(), key)?;
-        Ok(self)
+        let key = match key.try_into() {
+            Ok(k) => k,
+            Err(e) => {
+                tracing::error!("failed to convert header name: {}", e);
+                return self;
+            }
+        };
+        if let Err(e) = values.append_to_header(self.inner.headers_mut(), key) {
+            tracing::error!("failed to append header value: {}", e);
+        }
+        self
     }
 
     #[inline]
@@ -108,7 +118,7 @@ impl Response {
     }
 
     #[inline]
-    pub fn content_type<V>(&mut self, value: V) -> Result<&mut Self, Error>
+    pub fn content_type<V>(&mut self, value: V) -> &mut Self
     where
         V: TryInto<HeaderValue>,
         Error: From<V::Error>,
@@ -120,25 +130,30 @@ impl Response {
     pub fn html(&mut self, s: &'static str) -> &mut Self {
         self.status(StatusCode::OK)
             .send(s)
-            .content_type("text/html; charset=utf-8")
-            .expect("failed to set Content-Type header");
+            .content_type("text/html; charset=utf-8");
         self
     }
 
     #[inline]
-    pub fn locals(&self) -> &Locals {
-        &self.locals
-    }
-
-    #[inline]
-    pub fn locals_mut(&mut self) -> &mut Locals {
-        &mut self.locals
+    pub fn json(&mut self, value: impl serde::Serialize) -> &mut Self {
+        match serde_json::to_string(&value) {
+            Ok(json_str) => self
+                .status(StatusCode::OK)
+                .send(json_str)
+                .content_type("application/json; charset=utf-8"),
+            Err(e) => {
+                tracing::error!("failed to serialize JSON response: {}", e);
+                self.status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .send("Internal Server Error")
+                    .content_type("text/plain; charset=utf-8")
+            }
+        }
     }
 
     #[inline]
     pub fn get_render_ctx(&self) -> Value {
         let mut ctx = minijinja::__context::make();
-        for (key, value) in self.locals() {
+        for (key, value) in &self.locals {
             ctx.insert(key.into(), Value::from_serialize(value));
         }
         minijinja::__context::build(ctx)
@@ -164,8 +179,7 @@ impl Response {
 
         self.status(StatusCode::OK)
             .send(rendered)
-            .content_type("text/html; charset=utf-8")
-            .expect("failed to set Content-Type header");
+            .content_type("text/html; charset=utf-8");
 
         self
     }
@@ -187,19 +201,15 @@ impl Response {
 
     /// Redirects to the specified location with an optional status code.
     /// If no status is provided, defaults to 302 Found.
-    pub fn redirect(
-        &mut self,
-        location: impl AsRef<str>,
-        status: Option<StatusCode>,
-    ) -> Result<&mut Self, Error> {
+    pub fn redirect(&mut self, location: impl AsRef<str>, status: Option<StatusCode>) -> &mut Self {
         // Set the Location header
-        self.set((header::LOCATION, location.as_ref()))?;
+        self.set((header::LOCATION, location.as_ref()));
 
         // Set status code (default to 302 Found)
         let status_code = status.unwrap_or(StatusCode::FOUND);
         self.status(status_code);
 
-        Ok(self)
+        self
     }
 }
 

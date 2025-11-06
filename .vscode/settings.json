@@ -1,6 +1,7 @@
 {
     "rust-analyzer.cargo.features": [
         "cookie",
-        "session"
+        "session",
+        "logging"
     ]
 }

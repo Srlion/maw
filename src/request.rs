@@ -226,6 +226,18 @@ impl Request {
         self.ip.ip().is_loopback()
     }
 
+    #[inline]
+    pub fn query(&self) -> HashMap<String, String> {
+        let query_string = self.parts.uri.query().unwrap_or("");
+        serde_urlencoded::from_str(query_string).unwrap_or_default()
+    }
+
+    #[inline]
+    pub fn query_parse<T: DeserializeOwned>(&self) -> Result<T, Error> {
+        let query_string = self.parts.uri.query().unwrap_or("");
+        serde_urlencoded::from_str(query_string).map_err(Error::from)
+    }
+
     // #[inline]
     // pub async fn body(&mut self) -> Result<Bytes, Infallible> {
     // 	self.body_with_size(64 * 1024).await

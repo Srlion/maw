@@ -256,6 +256,11 @@ impl Locals {
             }
         }
     }
+
+    /// Check whether a key exists in the `Locals`.
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.map.as_ref().is_some_and(|map| map.contains_key(key))
+    }
 }
 
 impl fmt::Debug for Locals {

@@ -1,4 +1,4 @@
-use cookie::{Cookie, CookieJar, SameSite};
+pub use cookie::{Cookie, CookieJar, Key, SameSite};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{ctx::Ctx, error::Error};
@@ -10,25 +10,9 @@ pub enum CookieType {
     Encrypted,
 }
 
-/// Options for setting cookies
-#[derive(Default, Clone, Debug)]
-pub struct CookieOptions {
-    pub path: Option<String>,
-    pub domain: Option<String>,
-    pub secure: Option<bool>,
-    pub http_only: Option<bool>,
-    pub same_site: Option<SameSite>,
-    pub max_age: Option<cookie::time::Duration>,
-    pub expires: Option<cookie::time::OffsetDateTime>,
-}
-
 impl Ctx {
     fn cookie_key(&self) -> &cookie::Key {
-        self.app()
-            .config
-            .cookie_key
-            .as_ref()
-            .expect("Cookie key not set")
+        &self.app().config.cookie_key
     }
 
     pub fn get_cookie<T: DeserializeOwned>(
@@ -62,8 +46,14 @@ impl Ctx {
         value: &T,
         cookie_type: CookieType,
         options: Option<CookieOptions>,
-    ) -> Result<(), Error> {
-        let value_str = serde_json::to_string(value)?;
+    ) {
+        let value_str = match serde_json::to_string(value) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("failed to serialize cookie value: {}", e);
+                return;
+            }
+        };
         let cookie = if let Some(opts) = options {
             self.build_cookie(name, &value_str, opts)
         } else {
@@ -81,8 +71,6 @@ impl Ctx {
                 .private_mut(&self.cookie_key().clone())
                 .add(cookie),
         }
-
-        Ok(())
     }
 
     pub fn clear_cookie(&mut self, name: &str) {
@@ -92,9 +80,8 @@ impl Ctx {
     fn build_cookie<'a>(&self, name: &str, value: &str, options: CookieOptions) -> Cookie<'a> {
         let mut builder = Cookie::build((name.to_owned(), value.to_owned()));
 
-        if let Some(path) = options.path {
-            builder = builder.path(path);
-        }
+        builder = builder.path(options.path.unwrap_or("/".to_string()));
+
         if let Some(domain) = options.domain {
             builder = builder.domain(domain);
         }
@@ -141,5 +128,61 @@ pub async fn middleware(c: &mut Ctx) {
                 .headers_mut()
                 .append(http::header::SET_COOKIE, header_value);
         }
+    }
+}
+
+/// Options for setting cookies
+#[derive(Default, Clone, Debug)]
+pub struct CookieOptions {
+    path: Option<String>,
+    domain: Option<String>,
+    secure: Option<bool>,
+    http_only: Option<bool>,
+    same_site: Option<SameSite>,
+    max_age: Option<cookie::time::Duration>,
+    expires: Option<cookie::time::OffsetDateTime>,
+}
+
+impl CookieOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the path for the cookie
+    ///
+    /// Default: "/"
+    pub fn path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    pub fn domain(mut self, domain: impl Into<String>) -> Self {
+        self.domain = Some(domain.into());
+        self
+    }
+
+    pub fn secure(mut self, secure: bool) -> Self {
+        self.secure = Some(secure);
+        self
+    }
+
+    pub fn http_only(mut self, http_only: bool) -> Self {
+        self.http_only = Some(http_only);
+        self
+    }
+
+    pub fn same_site(mut self, same_site: SameSite) -> Self {
+        self.same_site = Some(same_site);
+        self
+    }
+
+    pub fn max_age(mut self, max_age: cookie::time::Duration) -> Self {
+        self.max_age = Some(max_age);
+        self
+    }
+
+    pub fn expires(mut self, expires: cookie::time::OffsetDateTime) -> Self {
+        self.expires = Some(expires);
+        self
     }
 }

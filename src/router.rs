@@ -77,7 +77,7 @@ impl Router {
     }
 
     #[inline(never)]
-    fn middleware_impl<F, R>(&self, f: F, skip: usize) -> &Self
+    fn middleware_impl<F, R>(&self, f: F, skip: usize) -> Self
     where
         for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
         R: IntoResponse + Send,
@@ -87,11 +87,11 @@ impl Router {
             .lock()
             .unwrap()
             .push(RouterItem::Handler(handler));
-        self
+        self.clone()
     }
 
     #[inline(never)]
-    pub fn middleware<F, R>(&self, f: F) -> &Self
+    pub fn middleware<F, R>(&self, f: F) -> Self
     where
         for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
         R: IntoResponse + Send,

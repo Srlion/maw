@@ -9,7 +9,6 @@ use hyper::server::conn::http1;
 use hyper::{Request as HyperRequest, body::Incoming as IncomingBody};
 use hyper_util::rt::TokioIo;
 use minijinja::path_loader;
-use smallvec::SmallVec;
 use smol_str::SmolStr;
 use tokio::net::TcpListener;
 
@@ -161,7 +160,7 @@ async fn handle_request(
 ) -> Result<HttpResponse, Infallible> {
     let mut response = HttpResponse::new(HttpBody::default());
 
-    let path = handle_path_slashes(request.uri().path().as_bytes());
+    let path = normalize_path(request.uri().path());
     let matched_route = match app.built_router.at(&path) {
         Ok(matched_route) => matched_route,
         Err(_) => {
@@ -210,34 +209,23 @@ async fn handle_request(
     Ok(c.res.inner)
 }
 
-fn handle_path_slashes(path_bytes: &[u8]) -> SmolStr {
-    let mut result: SmallVec<[u8; 24]> = SmallVec::new();
-    let mut last_was_slash = false;
+fn normalize_path(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
 
-    for &byte in path_bytes {
-        match byte {
-            b'/' | b'\\' => {
-                if !last_was_slash {
-                    result.push(b'/');
-                }
-                last_was_slash = true;
-            }
-            _ => {
-                // Convert uppercase ASCII directly on bytes
-                let byte = if byte.is_ascii_uppercase() {
-                    byte + 32 // Convert to lowercase
-                } else {
-                    byte
-                };
-                result.push(byte);
-                last_was_slash = false;
-            }
+    for ch in s.chars() {
+        if ch == '\\' {
+            result.push('/');
+        } else {
+            result.extend(ch.to_lowercase());
         }
     }
 
-    // SAFETY: path was constructed from valid UTF-8 bytes
-    let path = unsafe { std::str::from_utf8_unchecked(&result) };
-    SmolStr::new(path)
+    // Remove trailing slash unless it's just "/"
+    if result.len() > 1 && result.ends_with('/') {
+        result.pop();
+    }
+
+    result
 }
 
 struct ConnectionHandler {

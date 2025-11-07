@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 license = "MIT"
@@ -14,7 +14,6 @@ session = ["cookie", "serde/derive"]
 logging = []
 
 [dependencies]
-smallvec = "1"
 matchit = "0.9"
 mime_guess = "2"
 smol_str = "0.3"

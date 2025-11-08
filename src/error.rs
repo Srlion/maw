@@ -6,7 +6,7 @@ pub enum Error {
     #[error("data does not exist")]
     ParseNotFound,
 
-    #[error("failed to parse")]
+    #[error("failed to parse: {0}")]
     Parse(#[from] serde::de::value::Error),
 
     #[error("io: {0}")]

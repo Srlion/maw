@@ -49,17 +49,17 @@ impl Request {
     }
 
     #[inline]
-    pub fn param<'a, T>(&'a self, key: &str) -> Option<T>
+    pub fn param<T>(&self, key: &str) -> Option<T>
     where
-        T: Deserialize<'a>,
+        T: for<'de> Deserialize<'de>,
     {
         self.try_param(key).ok()
     }
 
     #[inline]
-    pub fn try_param<'a, T>(&'a self, key: &str) -> Result<T, Error>
+    pub fn try_param<T>(&self, key: &str) -> Result<T, Error>
     where
-        T: Deserialize<'a>,
+        T: for<'de> Deserialize<'de>,
     {
         self.params
             .get(key)

@@ -5,10 +5,9 @@ use http::{HeaderMap, HeaderValue, Method, Uri, Version, header::AsHeaderName};
 use http_body_util::BodyExt;
 use hyper::body::Incoming as IncomingBody;
 use mime_guess::{Mime, mime};
-use serde::{
-    Deserialize,
-    de::{DeserializeOwned, IntoDeserializer as _},
-};
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde::de::value::BorrowedStrDeserializer;
 use smol_str::SmolStr;
 
 use crate::{app::App, error::Error, locals::Locals};
@@ -49,23 +48,20 @@ impl Request {
     }
 
     #[inline]
-    pub fn param<T>(&self, key: &str) -> Option<T>
+    pub fn param<'a, T>(&'a self, key: &str) -> Option<T>
     where
-        T: for<'de> Deserialize<'de>,
+        T: Deserialize<'a>,
     {
         self.try_param(key).ok()
     }
 
     #[inline]
-    pub fn try_param<T>(&self, key: &str) -> Result<T, Error>
+    pub fn try_param<'a, T>(&'a self, key: &str) -> Result<T, Error>
     where
-        T: for<'de> Deserialize<'de>,
+        T: Deserialize<'a>,
     {
-        self.params
-            .get(key)
-            .map(|v| v.as_str())
-            .ok_or(Error::ParseNotFound)
-            .and_then(|v| T::deserialize(v.into_deserializer()).map_err(Error::Parse))
+        let value = self.params.get(key).ok_or(Error::ParseNotFound)?;
+        T::deserialize(BorrowedStrDeserializer::new(value.as_str())).map_err(Error::Parse)
     }
 
     /// Get param as &str.

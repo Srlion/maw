@@ -68,6 +68,21 @@ impl StatusError {
         self
     }
 
+    #[must_use]
+    pub fn detailed_display(&self) -> String {
+        let mut str_error = format!(
+            "code: {} name: {} brief: {}",
+            self.code, self.name, self.brief
+        );
+        if let Some(detail) = &self.detail {
+            write!(&mut str_error, " detail: {detail}").ok();
+        }
+        if let Some(error) = &self.error {
+            write!(&mut str_error, " error: {error}").ok();
+        }
+        str_error
+    }
+
     default_errors! {
         /// 400 Bad Request
         /// [[RFC7231, Section 6.5.1](https://tools.ietf.org/html/rfc7231#section-6.5.1)]
@@ -193,16 +208,10 @@ impl StdError for StatusError {}
 
 impl Display for StatusError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut str_error = format!(
+        let str_error = format!(
             "code: {} name: {} brief: {}",
             self.code, self.name, self.brief
         );
-        if let Some(detail) = &self.detail {
-            write!(&mut str_error, " detail: {detail}")?;
-        }
-        if let Some(error) = &self.error {
-            write!(&mut str_error, " error: {error}")?;
-        }
         f.write_str(&str_error)
     }
 }

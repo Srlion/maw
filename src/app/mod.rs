@@ -17,14 +17,13 @@ pub(crate) mod config;
 use crate::ALL;
 use crate::locals::Locals;
 use crate::request::Request;
-use crate::response::Response;
+use crate::response::{HttpBody, Response};
 use crate::{
     error::Error,
     router::{self, MatchRouter},
 };
 
-type HttpBody = http_body_util::Full<bytes::Bytes>;
-type HttpResponse<T = HttpBody> = http::Response<T>;
+type HttpResponse = http::Response<HttpBody>;
 
 #[derive(Default)]
 pub struct App {

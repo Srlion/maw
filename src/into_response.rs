@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use bytes::Bytes;
 
-use crate::ctx::Ctx;
+use crate::{ctx::Ctx, response::HttpBody};
 
 pub trait IntoResponse {
     fn into_response(self, c: &mut Ctx);
@@ -70,12 +70,18 @@ impl IntoResponse for &'static [u8] {
 
 impl IntoResponse for Cow<'static, str> {
     fn into_response(self, c: &mut Ctx) {
-        c.res.send(self);
+        c.res.send(self.into_owned());
     }
 }
 
 impl IntoResponse for Cow<'static, [u8]> {
     fn into_response(self, c: &mut Ctx) {
-        c.res.send(self);
+        c.res.send(self.into_owned());
+    }
+}
+
+impl IntoResponse for HttpBody {
+    fn into_response(self, c: &mut Ctx) {
+        *c.res.inner.body_mut() = self;
     }
 }

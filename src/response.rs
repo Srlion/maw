@@ -1,16 +1,109 @@
 use bytes::Bytes;
+use futures_core::Stream;
 use http::{
     self, HeaderMap, HeaderName, HeaderValue, StatusCode,
     header::{self, InvalidHeaderName},
 };
+use http_body::Body as HttpBodyTrait;
+use http_body::{Frame, SizeHint};
 use http_body_util::Full;
-use hyper::body::Body as _;
 use minijinja::Value;
-use std::{fmt, sync::Arc};
+use std::{
+    error::Error as StdError,
+    fmt,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use crate::{app::App, error::Error, locals::Locals};
 
-pub type HttpBody = Full<Bytes>;
+pub type BoxError = Box<dyn StdError + Send + Sync>;
+
+pub enum StreamKind {
+    /// Stream produces raw bytes (wrapped into data frames automatically)
+    Bytes(Pin<Box<dyn Stream<Item = Result<Bytes, BoxError>> + Send>>),
+    /// Stream produces frames directly (can include trailers)
+    Frames(Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, BoxError>> + Send>>),
+}
+
+#[derive(Default)]
+pub enum HttpBody {
+    #[default]
+    Empty,
+    Full(Full<Bytes>),
+    Stream(StreamKind),
+}
+
+impl fmt::Debug for HttpBody {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HttpBody::Empty => f.debug_struct("HttpBody::Empty").finish(),
+            HttpBody::Full(b) => f.debug_struct("HttpBody::Full").field("body", b).finish(),
+            HttpBody::Stream(_) => f.debug_struct("HttpBody::Stream").finish(),
+        }
+    }
+}
+
+impl HttpBody {
+    pub fn full(bytes: Bytes) -> Self {
+        HttpBody::Full(Full::new(bytes))
+    }
+
+    /// Create a stream that produces data frames only
+    pub fn stream<S>(stream: S) -> Self
+    where
+        S: Stream<Item = Result<Bytes, BoxError>> + Send + 'static,
+    {
+        HttpBody::Stream(StreamKind::Bytes(Box::pin(stream)))
+    }
+
+    /// Create a stream that can produce both data and trailer frames
+    pub fn stream_frames<S>(stream: S) -> Self
+    where
+        S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + 'static,
+    {
+        HttpBody::Stream(StreamKind::Frames(Box::pin(stream)))
+    }
+}
+
+impl HttpBodyTrait for HttpBody {
+    type Data = Bytes;
+    type Error = BoxError;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        let this = self.get_mut();
+        match this {
+            HttpBody::Empty => Poll::Ready(None),
+            HttpBody::Full(full) => Pin::new(full)
+                .poll_frame(cx)
+                .map(|opt| opt.map(|res| res.map_err(|never| match never {}))),
+            HttpBody::Stream(kind) => match kind {
+                // Wrap bytes into data frames
+                StreamKind::Bytes(stream) => match stream.as_mut().poll_next(cx) {
+                    Poll::Ready(Some(Ok(bytes))) => Poll::Ready(Some(Ok(Frame::data(bytes)))),
+                    Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+                    Poll::Ready(None) => Poll::Ready(None),
+                    Poll::Pending => Poll::Pending,
+                },
+                // Pass frames through directly
+                StreamKind::Frames(stream) => stream.as_mut().poll_next(cx),
+            },
+        }
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        match self {
+            HttpBody::Empty => SizeHint::with_exact(0),
+            HttpBody::Full(full) => full.size_hint(),
+            HttpBody::Stream(_) => SizeHint::new(),
+        }
+    }
+}
+
 pub type HttpResponse<T = HttpBody> = http::Response<T>;
 
 pub struct Response {
@@ -50,7 +143,8 @@ impl Response {
         self.status(status);
 
         if self.inner.body().size_hint().exact() == Some(0) {
-            *self.inner.body_mut() = status.canonical_reason().unwrap_or("").into();
+            let text = status.canonical_reason().unwrap_or("").to_string();
+            *self.inner.body_mut() = HttpBody::full(Bytes::from(text));
         }
 
         self
@@ -111,9 +205,30 @@ impl Response {
         self
     }
 
+    /// Send a *non-streaming* body.
     #[inline]
-    pub fn send(&mut self, body: impl Into<HttpBody>) -> &mut Self {
-        *self.inner.body_mut() = body.into();
+    pub fn send(&mut self, body: impl Into<Bytes>) -> &mut Self {
+        *self.inner.body_mut() = HttpBody::full(body.into());
+        self
+    }
+
+    /// Send a *streaming* body.
+    #[inline]
+    pub fn stream<S>(&mut self, stream: S) -> &mut Self
+    where
+        S: Stream<Item = Result<Bytes, BoxError>> + Send + 'static,
+    {
+        *self.inner.body_mut() = HttpBody::stream(stream);
+        self
+    }
+
+    /// Send a *streaming* body with frames.
+    #[inline]
+    pub fn stream_frames<S>(&mut self, stream: S) -> &mut Self
+    where
+        S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + 'static,
+    {
+        *self.inner.body_mut() = HttpBody::stream_frames(stream);
         self
     }
 

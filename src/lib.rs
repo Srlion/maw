@@ -1,5 +1,6 @@
 use std::sync::LazyLock;
 
+pub use http_body_util;
 pub use hyper;
 
 mod app;

@@ -25,7 +25,6 @@ use crate::{
 
 type HttpResponse = http::Response<HttpBody>;
 
-#[derive(Default)]
 pub struct App {
     pub(crate) router: router::Router,
     pub(crate) render_env: minijinja::Environment<'static>,
@@ -36,7 +35,13 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        Self::default()
+        App {
+            router: router::Router::new(),
+            render_env: minijinja::Environment::new(),
+            locals: Mutex::new(Locals::new()),
+            built_router: MatchRouter::default(),
+            config: config::Config::default(),
+        }
     }
 
     pub fn config(mut self, config: config::Config) -> Self {

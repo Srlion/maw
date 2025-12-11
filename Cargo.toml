@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.12.4"
+version = "0.12.5"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 license = "MIT"
@@ -34,7 +34,7 @@ hyper-util = { version = "0.1", features = [
 ] }
 paste = "1"
 async-trait = "0.1"
-minijinja = { version = "2", features = ["loader", "builtins"] }
+minijinja = { version = "2", features = ["loader", "builtins", "json"] }
 serde_json = "1"
 quick-xml = { version = "0.38", features = ["serialize"] }
 erased-serde = "0.4"

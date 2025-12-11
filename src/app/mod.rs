@@ -57,6 +57,17 @@ impl App {
         self
     }
 
+    pub fn render_env_filter<N, F, Rv, Args>(&mut self, name: N, f: F) -> &mut Self
+    where
+        N: Into<std::borrow::Cow<'static, str>>,
+        F: minijinja::functions::Function<Rv, Args>,
+        Rv: minijinja::value::FunctionResult,
+        Args: for<'a> minijinja::value::FunctionArgs<'a>,
+    {
+        self.render_env.add_filter(name.into(), f);
+        self
+    }
+
     /// Provides access to the application locals.
     pub fn with_locals<F>(&self, f: F) -> &Self
     where

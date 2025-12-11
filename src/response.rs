@@ -275,21 +275,23 @@ impl Response {
     }
 
     #[inline]
-    fn render_template(&mut self, template: &str, c: Value) -> &mut Self {
-        let template = match self.app.render_env.get_template(template) {
-            Ok(t) => t,
-            Err(_) => {
-                tracing::warn!("template not found: {}", template);
-                return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+    fn get_rendered_template(&self, template: &str, c: Value) -> Result<String, Error> {
+        let template = self.app.render_env.get_template(template).map_err(|e| {
+            tracing::warn!("template not found: {}", template);
+            Error::from(e)
+        })?;
 
-        let rendered = match template.render(&c) {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::warn!("failed to render template {}: {}", template.name(), e);
-                return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
-            }
+        let rendered = template.render(&c).map_err(|e| {
+            tracing::warn!("failed to render template {}: {}", template.name(), e);
+            Error::from(e)
+        })?;
+
+        Ok(rendered)
+    }
+
+    fn render_template(&mut self, template: &str, c: Value) -> &mut Self {
+        let Ok(rendered) = self.get_rendered_template(template, c) else {
+            return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
         };
 
         self.status(StatusCode::OK)
@@ -314,6 +316,58 @@ impl Response {
         self.render_template(template, final_ctx)
     }
 
+    fn render_template_compressed(&mut self, template: &str, c: Value) -> &mut Self {
+        let Ok(rendered) = self.get_rendered_template(template, c) else {
+            return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
+        };
+
+        let original_bytes = rendered.as_bytes();
+
+        // Try to compress and only use if it's actually smaller
+        let (body_bytes, should_mark_compressed) = if original_bytes.len() > 1600 {
+            match gzip_compress(original_bytes) {
+                Ok(compressed) if compressed.len() < original_bytes.len() => {
+                    // Compression saved space, use it
+                    (Bytes::from(compressed), true)
+                }
+                // Compressed but not smaller, don't use it
+                Ok(_) => (Bytes::from(rendered), false),
+                Err(e) => {
+                    tracing::warn!("gzip compression failed: {}, sending uncompressed", e);
+                    (Bytes::from(rendered), false)
+                }
+            }
+        } else {
+            // Too small to benefit from compression
+            (Bytes::from(rendered), false)
+        };
+
+        if should_mark_compressed {
+            self.set((header::CONTENT_ENCODING, "gzip"));
+        }
+
+        self.status(StatusCode::OK)
+            .send(body_bytes)
+            .content_type("text/html; charset=utf-8");
+
+        self
+    }
+
+    #[inline]
+    pub fn render_compressed(&mut self, template: &str) -> &mut Self {
+        let ctx = self.get_render_ctx();
+        self.render_template_compressed(template, ctx)
+    }
+
+    #[inline]
+    pub fn render_compressed_with(&mut self, template: &str, value: Value) -> &mut Self {
+        let final_ctx = minijinja::context! {
+            ..self.get_render_ctx(),
+            ..value,
+        };
+        self.render_template_compressed(template, final_ctx)
+    }
+
     /// Redirects to the specified location with an optional status code.
     /// If no status is provided, defaults to 302 Found.
     pub fn redirect(&mut self, location: impl AsRef<str>, status: Option<StatusCode>) -> &mut Self {
@@ -326,6 +380,16 @@ impl Response {
 
         self
     }
+}
+
+fn gzip_compress(data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use std::io::Write;
+
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+    encoder.write_all(data)?;
+    encoder.finish()
 }
 
 impl fmt::Debug for Response {

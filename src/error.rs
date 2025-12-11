@@ -44,6 +44,9 @@ pub enum Error {
 
     #[error("quick-xml de error: {0}")]
     QuickXmlDe(#[from] quick_xml::DeError),
+
+    #[error("minijinja error: {0}")]
+    MiniJinja(#[from] minijinja::Error),
 }
 
 impl From<Infallible> for Error {

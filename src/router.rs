@@ -98,12 +98,8 @@ impl Router {
     }
 
     #[inline(never)]
-    pub fn middleware<F, R>(&self, f: F) -> Self
-    where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
-        R: IntoResponse + Send,
-    {
-        self.middleware_impl(f, (), 4)
+    pub fn middleware(&self, handlers: impl AddMiddleware) -> Self {
+        handlers.add_middleware(self, 5)
     }
 
     #[inline(never)]
@@ -314,4 +310,64 @@ impl_add_handlers! {
     (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7; F8, R8),
     (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8; F9, R9),
     (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8, F9, R9; F10, R10),
+}
+
+pub trait AddMiddleware {
+    fn add_middleware(self, router: &Router, skip: usize) -> Router;
+}
+
+impl<F, R> AddMiddleware for F
+where
+    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+    R: IntoResponse + Send,
+{
+    fn add_middleware(self, router: &Router, skip: usize) -> Router {
+        router.middleware_impl(self, (), skip)
+    }
+}
+
+impl<F, R, S> AddMiddleware for WithState<F, S>
+where
+    for<'a> F: AsyncFn2<&'a mut Ctx, S, Output = R> + Send + Sync + 'static,
+    R: IntoResponse + Send,
+    S: Clone + Send + Sync + 'static,
+{
+    fn add_middleware(self, router: &Router, skip: usize) -> Router {
+        router.middleware_impl(self.1, (self.0,), skip)
+    }
+}
+
+macro_rules! impl_add_middleware {
+    ($(($($f:ident, $r:ident),+)),+ $(,)?) => {
+        $(
+            impl<$($f, $r),+> AddMiddleware for ($($f,)+)
+            where
+                $(
+                    for<'a> $f: AsyncFn1<&'a mut Ctx, Output = $r> + Send + Sync + 'static,
+                    $r: IntoResponse + Send,
+                )+
+            {
+                fn add_middleware(self, router: &Router, skip: usize) -> Router {
+                    #[allow(non_snake_case)]
+                    let ($($f,)+) = self;
+                    let r = router.clone();
+                    $(let r = r.middleware_impl($f, (), skip);)+
+                    r
+                }
+            }
+        )+
+    };
+}
+
+impl_add_middleware! {
+    (F1, R1),
+    (F1, R1, F2, R2),
+    (F1, R1, F2, R2, F3, R3),
+    (F1, R1, F2, R2, F3, R3, F4, R4),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8, F9, R9),
+    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8, F9, R9, F10, R10),
 }

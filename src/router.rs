@@ -6,9 +6,9 @@ use std::{
 use http::Method;
 
 use crate::{
-    async_fn::AsyncFn1,
+    async_fn::{AsyncFn1, AsyncFn2},
     ctx::Ctx,
-    handler::{Handler, HandlerType, HandlerWrapper},
+    handler::{Handler, HandlerCall, HandlerType, HandlerWrapper},
     into_response::IntoResponse,
 };
 
@@ -29,6 +29,8 @@ pub struct Router {
     path: String,
     items: Arc<Mutex<Vec<RouterItem>>>,
 }
+
+pub struct WithState<F, S>(pub S, pub F);
 
 impl Router {
     #[inline(never)]
@@ -58,12 +60,17 @@ impl Router {
     }
 
     #[inline(never)]
-    fn handle<F, R>(&self, method: Method, f: F, skip: usize) -> Self
+    fn handle<F, S>(&self, method: Method, f: F, state: S, skip: usize) -> Self
     where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
-        R: IntoResponse + Send,
+        F: HandlerCall<S> + 'static,
+        S: Clone + Send + Sync + 'static,
     {
-        let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Method(method), skip));
+        let handler = Arc::new(HandlerWrapper::new(
+            f,
+            state,
+            HandlerType::Method(method),
+            skip,
+        ));
         self.items
             .lock()
             .unwrap()
@@ -77,12 +84,12 @@ impl Router {
     }
 
     #[inline(never)]
-    fn middleware_impl<F, R>(&self, f: F, skip: usize) -> Self
+    fn middleware_impl<F, S>(&self, f: F, state: S, skip: usize) -> Self
     where
-        for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
-        R: IntoResponse + Send,
+        F: HandlerCall<S> + 'static,
+        S: Clone + Send + Sync + 'static,
     {
-        let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Middleware {}, skip));
+        let handler = Arc::new(HandlerWrapper::new(f, state, HandlerType::Middleware, skip));
         self.items
             .lock()
             .unwrap()
@@ -96,7 +103,7 @@ impl Router {
         for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
         R: IntoResponse + Send,
     {
-        self.middleware_impl(f, 4)
+        self.middleware_impl(f, (), 4)
     }
 
     #[inline(never)]
@@ -187,7 +194,6 @@ impl Router {
 impl std::fmt::Debug for Router {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{:#?}", self.flatten_routers())?;
-
         Ok(())
     }
 }
@@ -242,7 +248,26 @@ where
         skip: usize,
     ) -> Router {
         let group = Router::group(path);
-        let group = group.handle(method, self, skip);
+        let group = group.handle(method, self, (), skip);
+        router.push(group)
+    }
+}
+
+impl<F, R, S> AddHandlers for WithState<F, S>
+where
+    for<'a> F: AsyncFn2<&'a mut Ctx, S, Output = R> + Send + Sync + 'static,
+    R: IntoResponse + Send,
+    S: Clone + Send + Sync + 'static,
+{
+    fn add_handlers(
+        self,
+        router: &Router,
+        method: Method,
+        path: impl Into<String>,
+        skip: usize,
+    ) -> Router {
+        let group = Router::group(path);
+        let group = group.handle(method, self.1, (self.0,), skip);
         router.push(group)
     }
 }
@@ -270,8 +295,8 @@ macro_rules! impl_add_handlers {
                     let ($($f,)+ $last_f,) = self;
                     router.push(
                         Router::group(path)
-                            $(.middleware_impl($f, skip))+
-                            .handle(method, $last_f, skip)
+                            $(.middleware_impl($f, (), skip))+
+                            .handle(method, $last_f, (), skip)
                     )
                 }
             }

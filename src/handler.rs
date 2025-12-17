@@ -3,7 +3,11 @@ use std::{fmt::Debug, sync::Arc};
 use async_trait::async_trait;
 use http::Method;
 
-use crate::{async_fn::AsyncFn1, ctx::Ctx, into_response::IntoResponse};
+use crate::{
+    async_fn::{AsyncFn1, AsyncFn2},
+    ctx::Ctx,
+    into_response::IntoResponse,
+};
 
 pub type Handler = Arc<dyn HandlerRun>;
 
@@ -21,31 +25,70 @@ impl std::fmt::Display for HandlerType {
     }
 }
 
-pub(crate) struct HandlerWrapper<F> {
+// Helper trait to unify handlers with/without state
+pub trait HandlerCall<S>: Send + Sync {
+    type Output: IntoResponse + Send;
+    fn call(
+        &self,
+        c: &mut Ctx,
+        state: &S,
+    ) -> impl std::future::Future<Output = Self::Output> + Send;
+}
+
+impl<F, R> HandlerCall<()> for F
+where
+    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync,
+    R: IntoResponse + Send,
+{
+    type Output = R;
+    async fn call(&self, c: &mut Ctx, _: &()) -> Self::Output {
+        (self)(c).await
+    }
+}
+
+impl<F, R, S> HandlerCall<(S,)> for F
+where
+    for<'a> F: AsyncFn2<&'a mut Ctx, S, Output = R> + Send + Sync,
+    S: Clone + Sync,
+    R: IntoResponse + Send,
+{
+    type Output = R;
+    async fn call(&self, c: &mut Ctx, state: &(S,)) -> Self::Output {
+        (self)(c, state.0.clone()).await
+    }
+}
+
+pub(crate) struct HandlerWrapper<F, S = ()> {
     pub(crate) f: F,
+    pub(crate) state: S,
     pub(crate) handler_type: HandlerType,
     #[cfg(debug_assertions)]
     pub(crate) location: String,
 }
 
-impl<F> HandlerWrapper<F> {
-    pub(crate) fn new(f: F, handler_type: HandlerType, _skip: usize) -> Self {
+impl<F, S> HandlerWrapper<F, S> {
+    pub(crate) fn new(f: F, state: S, handler_type: HandlerType, _skip: usize) -> Self {
         #[cfg(debug_assertions)]
         {
             Self {
                 f,
+                state,
                 handler_type,
                 location: caller_location(_skip),
             }
         }
         #[cfg(not(debug_assertions))]
         {
-            Self { f, handler_type }
+            Self {
+                f,
+                state,
+                handler_type,
+            }
         }
     }
 }
 
-impl<F> Debug for HandlerWrapper<F> {
+impl<F, S> Debug for HandlerWrapper<F, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(debug_assertions)]
         {
@@ -65,13 +108,13 @@ pub(crate) trait HandlerRun: Send + Sync + Debug {
 }
 
 #[async_trait]
-impl<F, R> HandlerRun for HandlerWrapper<F>
+impl<F, S> HandlerRun for HandlerWrapper<F, S>
 where
-    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync,
-    R: IntoResponse + Send,
+    F: HandlerCall<S>,
+    S: Clone + Send + Sync,
 {
     async fn run(&self, c: &mut Ctx) {
-        let result = (self.f)(c).await;
+        let result = self.f.call(c, &self.state).await;
         result.into_response(c);
     }
 

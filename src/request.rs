@@ -134,6 +134,18 @@ impl Request {
         Ok(self.body_bytes.as_ref().unwrap())
     }
 
+    /// Get body as text.
+    ///
+    /// If body has already been read, returns the cached bytes. (Limits are not re-applied.)
+    ///
+    /// Default limit is 4MB.
+    #[inline]
+    pub async fn body_text(&mut self, limit: Option<usize>) -> Result<&str, Error> {
+        let bytes = self.body_raw(limit).await?;
+        let s = std::str::from_utf8(bytes)?;
+        Ok(s)
+    }
+
     #[inline]
     pub async fn parse_json<T: DeserializeOwned>(
         &mut self,
@@ -165,6 +177,16 @@ impl Request {
         Ok(value)
     }
 
+    /// Parse body based on content type.
+    ///
+    /// If body has already been read, returns the cached bytes. (Limits are not re-applied.)
+    ///
+    /// # Errors
+    /// Returns `Error::UnsupportedMediaType` if the content type is not supported.
+    ///
+    /// Returns `Error::MissingContentType` if the content type header is missing.
+    ///
+    /// Default limit is 4MB.
     #[inline]
     pub async fn parse_body<T: DeserializeOwned>(
         &mut self,

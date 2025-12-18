@@ -22,9 +22,9 @@ pub type BoxError = Box<dyn StdError + Send + Sync>;
 
 pub enum StreamKind {
     /// Stream produces raw bytes (wrapped into data frames automatically)
-    Bytes(Pin<Box<dyn Stream<Item = Result<Bytes, BoxError>> + Send>>),
+    Bytes(Pin<Box<dyn Stream<Item = Result<Bytes, BoxError>> + Send + Sync>>),
     /// Stream produces frames directly (can include trailers)
-    Frames(Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, BoxError>> + Send>>),
+    Frames(Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + Sync>>),
 }
 
 #[derive(Default)]
@@ -53,7 +53,7 @@ impl HttpBody {
     /// Create a stream that produces data frames only
     pub fn stream<S>(stream: S) -> Self
     where
-        S: Stream<Item = Result<Bytes, BoxError>> + Send + 'static,
+        S: Stream<Item = Result<Bytes, BoxError>> + Send + Sync + 'static,
     {
         HttpBody::Stream(StreamKind::Bytes(Box::pin(stream)))
     }
@@ -61,7 +61,7 @@ impl HttpBody {
     /// Create a stream that can produce both data and trailer frames
     pub fn stream_frames<S>(stream: S) -> Self
     where
-        S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + 'static,
+        S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + Sync + 'static,
     {
         HttpBody::Stream(StreamKind::Frames(Box::pin(stream)))
     }
@@ -216,7 +216,7 @@ impl Response {
     #[inline]
     pub fn stream<S>(&mut self, stream: S) -> &mut Self
     where
-        S: Stream<Item = Result<Bytes, BoxError>> + Send + 'static,
+        S: Stream<Item = Result<Bytes, BoxError>> + Send + Sync + 'static,
     {
         *self.inner.body_mut() = HttpBody::stream(stream);
         self
@@ -226,7 +226,7 @@ impl Response {
     #[inline]
     pub fn stream_frames<S>(&mut self, stream: S) -> &mut Self
     where
-        S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + 'static,
+        S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + Sync + 'static,
     {
         *self.inner.body_mut() = HttpBody::stream_frames(stream);
         self

@@ -33,6 +33,12 @@ pub struct App {
     pub(crate) config: config::Config,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         App {

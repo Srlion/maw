@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.13.3"
+version = "0.13.4"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 license = "MIT"
@@ -42,3 +42,4 @@ cookie = { version = "0.18", features = ["private", "signed"], optional = true }
 futures-core = "0.3.31"
 http-body = "1.0.1"
 flate2 = "1.1.5"
+tokio-util = "0.7.17"

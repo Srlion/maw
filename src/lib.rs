@@ -44,3 +44,4 @@ pub use crate::response::{BoxError, HttpBody};
 pub use app::config::Config;
 #[cfg(feature = "session")]
 pub use session::SessionConfig;
+pub use tokio_util::sync::CancellationToken;

@@ -11,6 +11,7 @@ use hyper_util::rt::TokioIo;
 use minijinja::path_loader;
 use smol_str::SmolStr;
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 
 pub(crate) mod config;
 
@@ -98,8 +99,31 @@ impl App {
         f(&mut locals);
         self
     }
+}
 
-    pub async fn listen<A>(mut self, addr: A) -> Result<(), Error>
+impl App {
+    /// Listen with ctrl+c shutdown
+    pub async fn listen<A>(self, addr: A) -> Result<(), Error>
+    where
+        A: net::ToSocketAddrs + std::fmt::Debug + 'static,
+    {
+        let token = CancellationToken::new();
+        let t = token.clone();
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("failed to install CTRL+C signal handler");
+            t.cancel();
+        });
+        self.listen_shutdown(addr, token).await
+    }
+
+    /// Listen with custom shutdown signal
+    pub async fn listen_shutdown<A>(
+        mut self,
+        addr: A,
+        shutdown: CancellationToken,
+    ) -> Result<(), Error>
     where
         A: net::ToSocketAddrs + std::fmt::Debug + 'static,
     {
@@ -116,16 +140,13 @@ impl App {
 
         let http = http1::Builder::new();
         let graceful = hyper_util::server::graceful::GracefulShutdown::new();
-        let mut signal = std::pin::pin!(shutdown_signal());
 
         loop {
             tokio::select! {
                 Ok((stream, peer_addr)) = listener.accept() => {
                     let io = TokioIo::new(stream);
                     let conn = http.serve_connection(io, ConnectionHandler { app: arc_app.clone(), peer_addr });
-                    // Watch this connection
                     let fut = graceful.watch(conn);
-
                     tokio::task::spawn(async move {
                         if let Err(e) = fut.await {
                             tracing::trace!("connection failed: {e:?}");
@@ -134,22 +155,17 @@ impl App {
                         }
                     });
                 }
-                _ = &mut signal => {
-                    drop(listener);
-                    tracing::info!("Graceful shutdown signal received");
+                _ = shutdown.cancelled() => {
+                    tracing::info!("Shutdown signal received");
                     break;
                 }
             }
         }
 
-        tracing::info!("Waiting for all connections to close...");
+        tracing::info!("Waiting for connections to close...");
         tokio::select! {
-            _ = graceful.shutdown() => {
-               tracing::info!("All connections gracefully closed");
-            },
-            _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
-               tracing::info!("Timed out waiting for all connections to close");
-            }
+            _ = graceful.shutdown() => tracing::info!("All connections closed"),
+            _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => tracing::info!("Shutdown timed out"),
         }
 
         Ok(())
@@ -166,12 +182,6 @@ impl Clone for App {
             config: self.config.clone(),
         }
     }
-}
-
-async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install CTRL+C signal handler");
 }
 
 async fn handle_request(

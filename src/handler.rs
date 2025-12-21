@@ -1,4 +1,4 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{any::Any, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use http::Method;
@@ -11,7 +11,7 @@ use crate::{
 
 pub type Handler = Arc<dyn HandlerRun>;
 
-pub(crate) enum HandlerType {
+pub enum HandlerType {
     Middleware,
     Method(Method),
 }
@@ -102,16 +102,23 @@ impl<F, S> Debug for HandlerWrapper<F, S> {
 }
 
 #[async_trait]
-pub(crate) trait HandlerRun: Send + Sync + Debug {
+pub trait HandlerRun: Send + Sync + Debug {
     async fn run(&self, c: &mut Ctx);
     fn handler_type(&self) -> &HandlerType;
+    fn state(&self) -> &dyn Any;
+}
+
+impl dyn HandlerRun {
+    pub fn get_state<S: 'static>(&self) -> Option<&S> {
+        self.state().downcast_ref::<(S,)>().map(|s| &s.0)
+    }
 }
 
 #[async_trait]
 impl<F, S> HandlerRun for HandlerWrapper<F, S>
 where
     F: HandlerCall<S>,
-    S: Clone + Send + Sync,
+    S: Clone + Send + Sync + 'static,
 {
     async fn run(&self, c: &mut Ctx) {
         let result = self.f.call(c, &self.state).await;
@@ -120,6 +127,10 @@ where
 
     fn handler_type(&self) -> &HandlerType {
         &self.handler_type
+    }
+
+    fn state(&self) -> &dyn Any {
+        &self.state
     }
 }
 

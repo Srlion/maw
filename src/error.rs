@@ -27,7 +27,7 @@ pub enum Error {
     #[error("invalid header value: {0}")]
     InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
 
-    #[error("failed to collect body: {0}")]
+    #[error("{0}")]
     BodyCollect(Box<dyn StdError + Send + Sync>),
 
     #[error("serde_json: {0}")]

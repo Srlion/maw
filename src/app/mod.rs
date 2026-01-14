@@ -1,7 +1,5 @@
 use std::convert::Infallible;
-use std::future::Future;
 use std::net;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 use http::StatusCode;
@@ -160,13 +158,12 @@ impl App {
                         continue;
                     };
                     let io = TokioIo::new(stream);
-                    let conn = http.serve_connection(
-                        io,
-                        ConnectionHandler {
-                            app: arc_app.clone(),
-                            peer_addr,
-                        },
-                    );
+                    let app = arc_app.clone();
+                    let service = hyper::service::service_fn(move |req| {
+                        handle_request(req, app.clone(), peer_addr)
+                    });
+
+                    let conn = http.serve_connection(io, service);
                     let fut = graceful.watch(conn);
                     tokio::task::spawn(async move {
                         if let Err(e) = fut.await {
@@ -279,21 +276,4 @@ fn normalize_path(s: &str) -> String {
     }
 
     result
-}
-
-struct ConnectionHandler {
-    app: Arc<App>,
-    // The peer address of the connection
-    peer_addr: std::net::SocketAddr,
-}
-
-impl hyper::service::Service<HyperRequest<IncomingBody>> for ConnectionHandler {
-    type Response = HttpResponse;
-    type Error = Infallible;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-
-    #[inline]
-    fn call(&self, req: HyperRequest<IncomingBody>) -> Self::Future {
-        Box::pin(handle_request(req, self.app.clone(), self.peer_addr))
-    }
 }

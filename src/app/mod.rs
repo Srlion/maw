@@ -141,31 +141,36 @@ impl App {
         let http = http1::Builder::new();
         let graceful = hyper_util::server::graceful::GracefulShutdown::new();
 
-        loop {
-            tokio::select! {
-                Ok((stream, peer_addr)) = listener.accept() => {
+        let _ = shutdown
+            .run_until_cancelled(async {
+                loop {
+                    let Ok((stream, peer_addr)) = listener.accept().await else {
+                        continue;
+                    };
                     let io = TokioIo::new(stream);
-                    let conn = http.serve_connection(io, ConnectionHandler { app: arc_app.clone(), peer_addr });
+                    let conn = http.serve_connection(
+                        io,
+                        ConnectionHandler {
+                            app: arc_app.clone(),
+                            peer_addr,
+                        },
+                    );
                     let fut = graceful.watch(conn);
                     tokio::task::spawn(async move {
                         if let Err(e) = fut.await {
                             tracing::trace!("connection failed: {e:?}");
-                        } else {
-                            tracing::trace!("connection successful");
                         }
                     });
                 }
-                _ = shutdown.cancelled() => {
-                    tracing::info!("Shutdown signal received");
-                    break;
-                }
-            }
-        }
+            })
+            .await;
+
+        tracing::info!("Shutdown signal received!");
 
         tracing::info!("Waiting for connections to close...");
-        tokio::select! {
-            _ = graceful.shutdown() => tracing::info!("All connections closed"),
-            _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => tracing::info!("Shutdown timed out"),
+        match tokio::time::timeout(std::time::Duration::from_secs(10), graceful.shutdown()).await {
+            Ok(_) => tracing::info!("All connections closed"),
+            Err(_) => tracing::info!("Shutdown timed out"),
         }
 
         Ok(())

@@ -32,6 +32,8 @@ pub struct App {
     pub(crate) locals: Mutex<Locals>,
     pub(crate) built_router: MatchRouter,
     pub(crate) config: config::Config,
+    /// Shutdown timeout in seconds
+    pub(crate) shutdown_timeout: std::time::Duration,
 }
 
 impl Default for App {
@@ -48,6 +50,7 @@ impl App {
             locals: Mutex::new(Locals::new()),
             built_router: MatchRouter::default(),
             config: config::Config::default(),
+            shutdown_timeout: std::time::Duration::from_secs(10),
         }
     }
 
@@ -77,6 +80,15 @@ impl App {
         Args: for<'a> minijinja::value::FunctionArgs<'a>,
     {
         self.render_env.add_filter(name.into(), f);
+        self
+    }
+
+    /// Sets the graceful shutdown timeout duration.
+    ///
+    /// This is how long the server will wait for existing connections to close
+    /// before forcing shutdown. Default is 10 seconds.
+    pub fn shutdown_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.shutdown_timeout = timeout;
         self
     }
 
@@ -167,10 +179,14 @@ impl App {
 
         tracing::info!("Shutdown signal received!");
 
-        tracing::info!("Waiting for connections to close...");
-        match tokio::time::timeout(std::time::Duration::from_secs(10), graceful.shutdown()).await {
-            Ok(_) => tracing::info!("All connections closed"),
-            Err(_) => tracing::info!("Shutdown timed out"),
+        tracing::info!(
+            "Waiting for connections to close (timeout: {:?})...",
+            arc_app.shutdown_timeout
+        );
+
+        match tokio::time::timeout(arc_app.shutdown_timeout, graceful.shutdown()).await {
+            Ok(_) => tracing::info!("All connections closed!"),
+            Err(_) => tracing::info!("Shutdown timed out!"),
         }
 
         Ok(())
@@ -185,6 +201,7 @@ impl Clone for App {
             locals: Mutex::new(self.locals.lock().unwrap().clone()),
             built_router: MatchRouter::default(),
             config: self.config.clone(),
+            shutdown_timeout: self.shutdown_timeout,
         }
     }
 }

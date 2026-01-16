@@ -12,6 +12,7 @@ default = []
 cookie = ["dep:cookie"]
 session = ["cookie", "serde/derive"]
 logging = []
+xml = ["dep:quick-xml"]
 
 [dependencies]
 matchit = "0.9"
@@ -36,7 +37,7 @@ paste = "1"
 async-trait = "0.1"
 minijinja = { version = "2", features = ["loader", "builtins", "json"] }
 serde_json = "1"
-quick-xml = { version = "0.38", features = ["serialize"] }
+quick-xml = { version = "0.38", features = ["serialize"], optional = true }
 erased-serde = "0.4"
 cookie = { version = "0.18", features = ["private", "signed"], optional = true }
 futures-core = "0.3.31"

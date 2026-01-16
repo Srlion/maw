@@ -42,6 +42,7 @@ pub enum Error {
     #[error("missing content type")]
     MissingContentType,
 
+    #[cfg(feature = "xml")]
     #[error("quick-xml de error: {0}")]
     QuickXmlDe(#[from] quick_xml::DeError),
 

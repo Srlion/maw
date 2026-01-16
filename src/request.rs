@@ -166,6 +166,7 @@ impl Request {
         Ok(value)
     }
 
+    #[cfg(feature = "xml")]
     #[inline]
     pub async fn parse_xml<T: DeserializeOwned>(
         &mut self,
@@ -199,11 +200,19 @@ impl Request {
                 } else if mime.type_() == mime::APPLICATION {
                     match mime.subtype().as_str() {
                         "x-www-form-urlencoded" => self.parse_form(limit).await,
+                        #[cfg(feature = "xml")]
                         "xml" => self.parse_xml(limit).await,
                         _ => Err(Error::UnsupportedMediaType),
                     }
                 } else if mime.type_() == mime::TEXT && mime.subtype() == mime::XML {
-                    self.parse_xml(limit).await
+                    #[cfg(feature = "xml")]
+                    {
+                        self.parse_xml(limit).await
+                    }
+                    #[cfg(not(feature = "xml"))]
+                    {
+                        Err(Error::UnsupportedMediaType)
+                    }
                 } else {
                     Err(Error::UnsupportedMediaType)
                 }

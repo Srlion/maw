@@ -13,6 +13,7 @@ cookie = ["dep:cookie"]
 session = ["cookie", "serde/derive"]
 logging = []
 xml = ["dep:quick-xml"]
+full = ["cookie", "session", "logging", "xml"]
 
 [dependencies]
 matchit = "0.9"

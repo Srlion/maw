@@ -16,7 +16,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::{app::App, error::Error, locals::Locals};
+use crate::{any_map::AnyMap, app::App, error::Error, serializable_any::SerializableAny};
 
 pub type BoxError = Box<dyn StdError + Send + Sync>;
 
@@ -109,7 +109,7 @@ pub type HttpResponse<T = HttpBody> = http::Response<T>;
 pub struct Response {
     pub(crate) app: Arc<App>,
     pub(crate) inner: http::response::Response<HttpBody>,
-    pub locals: Locals,
+    pub locals: AnyMap<dyn SerializableAny>,
     // Indicates if the status code has been modified by the user
     pub(crate) status_modified: bool,
 }
@@ -120,7 +120,7 @@ impl Response {
         Response {
             app,
             inner: res,
-            locals: Locals::new(),
+            locals: AnyMap::new(),
             status_modified: false,
         }
     }
@@ -268,6 +268,11 @@ impl Response {
     #[inline]
     pub fn get_render_ctx(&self) -> Value {
         let mut ctx = minijinja::__context::make();
+        self.app.with_locals(|l| {
+            for (key, value) in l {
+                ctx.insert(key.into(), Value::from_serialize(value));
+            }
+        });
         for (key, value) in &self.locals {
             ctx.insert(key.into(), Value::from_serialize(value));
         }

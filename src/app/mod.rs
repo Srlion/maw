@@ -14,9 +14,10 @@ use tokio_util::sync::CancellationToken;
 pub(crate) mod config;
 
 use crate::ALL;
-use crate::locals::Locals;
+use crate::any_map::AnyMap;
 use crate::request::Request;
 use crate::response::{HttpBody, Response};
+use crate::serializable_any::SerializableAny;
 use crate::{
     error::Error,
     router::{self, MatchRouter},
@@ -27,7 +28,7 @@ type HttpResponse = http::Response<HttpBody>;
 pub struct App {
     pub(crate) router: router::Router,
     pub(crate) render_env: minijinja::Environment<'static>,
-    pub(crate) locals: Mutex<Locals>,
+    pub(crate) locals: Mutex<AnyMap<dyn SerializableAny>>,
     pub(crate) built_router: MatchRouter,
     pub(crate) config: config::Config,
     /// Shutdown timeout in seconds
@@ -45,7 +46,7 @@ impl App {
         App {
             router: router::Router::new(),
             render_env: minijinja::Environment::new(),
-            locals: Mutex::new(Locals::new()),
+            locals: Mutex::new(AnyMap::new()),
             built_router: MatchRouter::default(),
             config: config::Config::default(),
             shutdown_timeout: std::time::Duration::from_secs(10),
@@ -93,7 +94,7 @@ impl App {
     /// Provides access to the application locals.
     pub fn with_locals<F>(&self, f: F) -> &Self
     where
-        F: FnOnce(&Locals),
+        F: FnOnce(&AnyMap<dyn SerializableAny>),
     {
         let locals = self.locals.lock().unwrap();
         f(&locals);
@@ -103,7 +104,7 @@ impl App {
     /// Provides mutable access to the application locals.
     pub fn with_locals_mut<F>(&self, f: F) -> &Self
     where
-        F: FnOnce(&mut Locals),
+        F: FnOnce(&mut AnyMap<dyn SerializableAny>),
     {
         let mut locals = self.locals.lock().unwrap();
         f(&mut locals);

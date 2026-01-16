@@ -10,14 +10,14 @@ use serde::de::DeserializeOwned;
 use serde::de::value::BorrowedStrDeserializer;
 use smol_str::SmolStr;
 
-use crate::{app::App, error::Error, locals::Locals};
+use crate::{any_map::AnyMap, app::App, error::Error, serializable_any::CloneableAny};
 
 pub struct Request {
     pub(crate) app: Arc<App>,
     pub(crate) parts: http::request::Parts,
     pub(crate) body: IncomingBody,
     pub params: HashMap<SmolStr, SmolStr>,
-    pub locals: Locals,
+    pub locals: AnyMap<dyn CloneableAny>,
     pub(crate) body_bytes: Option<Bytes>,
     pub(crate) ip: std::net::SocketAddr,
 }
@@ -36,7 +36,7 @@ impl Request {
             parts,
             body,
             params,
-            locals: Locals::new(),
+            locals: AnyMap::new(),
             body_bytes: None,
             ip: peer_addr,
         }

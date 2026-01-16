@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use http::Extensions;
-
 #[cfg(feature = "session")]
 use crate::session::Session;
 use crate::{app::App, handler::Handler, request::Request, response::Response};
@@ -9,7 +7,6 @@ use crate::{app::App, handler::Handler, request::Request, response::Response};
 pub struct Ctx {
     pub req: Request,
     pub res: Response,
-    pub extensions: Extensions,
     pub(crate) handlers: Arc<[Handler]>,
     pub(crate) index_handler: usize,
     #[cfg(feature = "cookie")]
@@ -23,7 +20,6 @@ impl Ctx {
         Self {
             req,
             res,
-            extensions: Extensions::new(),
             handlers,
             index_handler: 0,
             #[cfg(feature = "cookie")]

@@ -21,9 +21,9 @@ impl Session {
     }
 
     /// Get a value from the session
-    pub fn get<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
+    pub fn get<T: DeserializeOwned>(&self, key: impl AsRef<str>) -> Option<T> {
         self.data
-            .get(key)
+            .get(key.as_ref())
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 

@@ -1,3 +1,5 @@
+// Thanks to https://github.com/steffahn/async_fn_traits
+
 use std::future::Future;
 
 macro_rules! impl_async_fn {

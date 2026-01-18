@@ -47,5 +47,4 @@ erased-serde = "0.4"
 cookie = { version = "0.18", features = ["private", "signed"], optional = true }
 futures-core = "0.3.31"
 http-body = "1.0.1"
-flate2 = "1.1.5"
 tokio-util = "0.7.17"

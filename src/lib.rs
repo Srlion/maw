@@ -9,6 +9,8 @@ mod async_fn;
 pub mod body_limit;
 #[cfg(feature = "cookie")]
 pub mod cookie;
+#[cfg(feature = "csrf")]
+pub mod csrf;
 mod ctx;
 mod error;
 mod handler;

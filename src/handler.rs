@@ -1,6 +1,5 @@
-use std::{any::Any, fmt::Debug, sync::Arc};
+use std::{any::Any, fmt::Debug, pin::Pin, sync::Arc};
 
-use async_trait::async_trait;
 use http::Method;
 
 use crate::{
@@ -28,11 +27,7 @@ impl std::fmt::Display for HandlerType {
 // Helper trait to unify handlers with/without state
 pub trait HandlerCall<S>: Send + Sync {
     type Output: IntoResponse + Send;
-    fn call(
-        &self,
-        c: &mut Ctx,
-        state: &S,
-    ) -> impl std::future::Future<Output = Self::Output> + Send;
+    fn call(&self, c: &mut Ctx, state: &S) -> impl Future<Output = Self::Output> + Send;
 }
 
 impl<F, R> HandlerCall<()> for F
@@ -101,9 +96,13 @@ impl<F, S> Debug for HandlerWrapper<F, S> {
     }
 }
 
-#[async_trait]
 pub trait HandlerRun: Send + Sync + Debug {
-    async fn run(&self, c: &mut Ctx);
+    fn run<'s, 'c, 'a>(&'s self, c: &'c mut Ctx) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+    where
+        's: 'a,
+        'c: 'a,
+        Self: 'a;
+
     fn handler_type(&self) -> &HandlerType;
     fn state(&self) -> &dyn Any;
 }
@@ -114,15 +113,21 @@ impl dyn HandlerRun {
     }
 }
 
-#[async_trait]
 impl<F, S> HandlerRun for HandlerWrapper<F, S>
 where
     F: HandlerCall<S>,
     S: Clone + Send + Sync + 'static,
 {
-    async fn run(&self, c: &mut Ctx) {
-        let result = self.f.call(c, &self.state).await;
-        result.into_response(c);
+    fn run<'s, 'c, 'a>(&'s self, c: &'c mut Ctx) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+    where
+        's: 'a,
+        'c: 'a,
+        Self: 'a,
+    {
+        Box::pin(async move {
+            let result = self.f.call(c, &self.state).await;
+            result.into_response(c);
+        })
     }
 
     fn handler_type(&self) -> &HandlerType {

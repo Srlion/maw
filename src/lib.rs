@@ -36,6 +36,7 @@ pub mod prelude {
     pub use crate::status_error::StatusError;
     pub use http::StatusCode;
     pub use http::method::Method;
+    #[cfg(feature = "minijinja")]
     pub use minijinja;
 }
 

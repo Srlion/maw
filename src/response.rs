@@ -7,6 +7,7 @@ use http::{
 use http_body::Body as HttpBodyTrait;
 use http_body::{Frame, SizeHint};
 use http_body_util::Full;
+#[cfg(feature = "minijinja")]
 use minijinja::Value;
 use std::{
     error::Error as StdError,
@@ -265,6 +266,7 @@ impl Response {
         }
     }
 
+    #[cfg(feature = "minijinja")]
     #[inline]
     pub fn get_render_ctx(&self) -> Value {
         let mut ctx = minijinja::__context::make();
@@ -279,6 +281,7 @@ impl Response {
         minijinja::__context::build(ctx)
     }
 
+    #[cfg(feature = "minijinja")]
     #[inline]
     fn get_rendered_template(&self, template: &str, c: Value) -> Result<String, Error> {
         let template = self.app.render_env.get_template(template).map_err(|e| {
@@ -294,6 +297,7 @@ impl Response {
         Ok(rendered)
     }
 
+    #[cfg(feature = "minijinja")]
     fn render_template(&mut self, template: &str, c: Value) -> &mut Self {
         let Ok(rendered) = self.get_rendered_template(template, c) else {
             return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
@@ -306,12 +310,14 @@ impl Response {
         self
     }
 
+    #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render(&mut self, template: &str) -> &mut Self {
         let ctx = self.get_render_ctx();
         self.render_template(template, ctx)
     }
 
+    #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render_with(&mut self, template: &str, value: Value) -> &mut Self {
         let final_ctx = minijinja::context! {
@@ -321,6 +327,7 @@ impl Response {
         self.render_template(template, final_ctx)
     }
 
+    #[cfg(feature = "minijinja")]
     fn render_template_compressed(&mut self, template: &str, c: Value) -> &mut Self {
         let Ok(rendered) = self.get_rendered_template(template, c) else {
             return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
@@ -358,12 +365,14 @@ impl Response {
         self
     }
 
+    #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render_compressed(&mut self, template: &str) -> &mut Self {
         let ctx = self.get_render_ctx();
         self.render_template_compressed(template, ctx)
     }
 
+    #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render_compressed_with(&mut self, template: &str, value: Value) -> &mut Self {
         let final_ctx = minijinja::context! {
@@ -387,6 +396,7 @@ impl Response {
     }
 }
 
+#[cfg(feature = "minijinja")]
 fn gzip_compress(data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
     use flate2::Compression;
     use flate2::write::GzEncoder;

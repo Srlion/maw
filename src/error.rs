@@ -46,6 +46,7 @@ pub enum Error {
     #[error("quick-xml de error: {0}")]
     QuickXmlDe(#[from] quick_xml::DeError),
 
+    #[cfg(feature = "minijinja")]
     #[error("minijinja error: {0}")]
     MiniJinja(#[from] minijinja::Error),
 }

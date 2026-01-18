@@ -6,7 +6,6 @@ use http::StatusCode;
 use hyper::server::conn::http1;
 use hyper::{Request as HyperRequest, body::Incoming as IncomingBody};
 use hyper_util::rt::TokioIo;
-use minijinja::path_loader;
 use smol_str::SmolStr;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -27,6 +26,7 @@ type HttpResponse = http::Response<HttpBody>;
 
 pub struct App {
     pub(crate) router: router::Router,
+    #[cfg(feature = "minijinja")]
     pub(crate) render_env: minijinja::Environment<'static>,
     pub(crate) locals: Mutex<AnyMap<dyn SerializableAny>>,
     pub(crate) built_router: MatchRouter,
@@ -45,6 +45,7 @@ impl App {
     pub fn new() -> Self {
         App {
             router: router::Router::new(),
+            #[cfg(feature = "minijinja")]
             render_env: minijinja::Environment::new(),
             locals: Mutex::new(AnyMap::new()),
             built_router: MatchRouter::default(),
@@ -66,11 +67,13 @@ impl App {
         self
     }
 
+    #[cfg(feature = "minijinja")]
     pub fn views(mut self, path: impl AsRef<std::path::Path>) -> Self {
-        self.render_env.set_loader(path_loader(path));
+        self.render_env.set_loader(minijinja::path_loader(path));
         self
     }
 
+    #[cfg(feature = "minijinja")]
     pub fn render_env_filter<N, F, Rv, Args>(mut self, name: N, f: F) -> Self
     where
         N: Into<std::borrow::Cow<'static, str>>,
@@ -195,6 +198,7 @@ impl Clone for App {
     fn clone(&self) -> Self {
         App {
             router: self.router.clone(),
+            #[cfg(feature = "minijinja")]
             render_env: self.render_env.clone(),
             locals: Mutex::new(self.locals.lock().unwrap().clone()),
             built_router: MatchRouter::default(),

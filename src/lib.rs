@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 pub use http_body_util;
 pub use hyper;
 
-mod any_map;
+mod any_value_map;
 mod app;
 mod async_fn;
 #[cfg(feature = "cookie")]
@@ -17,7 +17,6 @@ pub mod logging;
 mod request;
 mod response;
 mod router;
-mod serializable_any;
 #[cfg(feature = "session")]
 pub mod session;
 mod status_error;

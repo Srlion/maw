@@ -1,14 +1,3 @@
-use bytes::Bytes;
-use futures_core::Stream;
-use http::{
-    self, HeaderMap, HeaderName, HeaderValue, StatusCode,
-    header::{self, InvalidHeaderName},
-};
-use http_body::Body as HttpBodyTrait;
-use http_body::{Frame, SizeHint};
-use http_body_util::Full;
-#[cfg(feature = "minijinja")]
-use minijinja::Value;
 use std::{
     error::Error as StdError,
     fmt,
@@ -16,6 +5,15 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
+
+use bytes::Bytes;
+use futures_core::Stream;
+use http::{
+    self, HeaderMap, HeaderName, HeaderValue, StatusCode,
+    header::{self, InvalidHeaderName},
+};
+use http_body::{Body as HttpBodyTrait, Frame, SizeHint};
+use http_body_util::Full;
 
 use crate::{any_map::AnyMap, app::App, error::Error, serializable_any::SerializableAny};
 
@@ -268,22 +266,22 @@ impl Response {
 
     #[cfg(feature = "minijinja")]
     #[inline]
-    pub fn get_render_ctx(&self) -> Value {
+    pub fn get_render_ctx(&self) -> minijinja::Value {
         let mut ctx = minijinja::__context::make();
         self.app.with_locals(|l| {
             for (key, value) in l {
-                ctx.insert(key.into(), Value::from_serialize(value));
+                ctx.insert(key.into(), minijinja::Value::from_serialize(value));
             }
         });
         for (key, value) in &self.locals {
-            ctx.insert(key.into(), Value::from_serialize(value));
+            ctx.insert(key.into(), minijinja::Value::from_serialize(value));
         }
         minijinja::__context::build(ctx)
     }
 
     #[cfg(feature = "minijinja")]
     #[inline]
-    fn get_rendered_template(&self, template: &str, c: Value) -> Result<String, Error> {
+    fn get_rendered_template(&self, template: &str, c: minijinja::Value) -> Result<String, Error> {
         let template = self.app.render_env.get_template(template).map_err(|e| {
             tracing::warn!("template not found: {}", template);
             Error::from(e)
@@ -298,7 +296,7 @@ impl Response {
     }
 
     #[cfg(feature = "minijinja")]
-    fn render_template(&mut self, template: &str, c: Value) -> &mut Self {
+    fn render_template(&mut self, template: &str, c: minijinja::Value) -> &mut Self {
         let Ok(rendered) = self.get_rendered_template(template, c) else {
             return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
         };
@@ -319,7 +317,7 @@ impl Response {
 
     #[cfg(feature = "minijinja")]
     #[inline]
-    pub fn render_with(&mut self, template: &str, value: Value) -> &mut Self {
+    pub fn render_with(&mut self, template: &str, value: minijinja::Value) -> &mut Self {
         let final_ctx = minijinja::context! {
             ..self.get_render_ctx(),
             ..value,
@@ -328,7 +326,7 @@ impl Response {
     }
 
     #[cfg(feature = "minijinja")]
-    fn render_template_compressed(&mut self, template: &str, c: Value) -> &mut Self {
+    fn render_template_compressed(&mut self, template: &str, c: minijinja::Value) -> &mut Self {
         let Ok(rendered) = self.get_rendered_template(template, c) else {
             return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
         };
@@ -374,7 +372,7 @@ impl Response {
 
     #[cfg(feature = "minijinja")]
     #[inline]
-    pub fn render_compressed_with(&mut self, template: &str, value: Value) -> &mut Self {
+    pub fn render_compressed_with(&mut self, template: &str, value: minijinja::Value) -> &mut Self {
         let final_ctx = minijinja::context! {
             ..self.get_render_ctx(),
             ..value,

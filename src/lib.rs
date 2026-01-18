@@ -6,6 +6,7 @@ pub use hyper;
 mod any_value_map;
 mod app;
 mod async_fn;
+pub mod body_limit;
 #[cfg(feature = "cookie")]
 pub mod cookie;
 mod ctx;

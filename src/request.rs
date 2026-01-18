@@ -24,6 +24,10 @@ pub struct Request {
     pub locals: AnyMap<dyn CloneableAny>,
     pub(crate) body_bytes: Option<Bytes>,
     pub(crate) ip: std::net::SocketAddr,
+    /// Max body size that the server accepts.
+    ///
+    /// Default: 4MB
+    pub(crate) body_limit: usize,
 }
 
 impl Request {
@@ -35,6 +39,7 @@ impl Request {
         peer_addr: std::net::SocketAddr,
     ) -> Self {
         let (parts, body) = request.into_parts();
+        let body_limit = app.config.body_limit;
         Request {
             app,
             parts,
@@ -43,6 +48,7 @@ impl Request {
             locals: AnyMap::new(),
             body_bytes: None,
             ip: peer_addr,
+            body_limit,
         }
     }
 
@@ -120,6 +126,13 @@ impl Request {
         self.parts.version
     }
 
+    /// Set the maximum body size that the request will read.
+    ///
+    /// Default: 4MB
+    pub fn body_limit(&mut self, limit: usize) {
+        self.body_limit = limit;
+    }
+
     /// Get raw body bytes.
     ///
     /// If body has already been read, returns the cached bytes. (Limits are not re-applied.)
@@ -130,7 +143,7 @@ impl Request {
         if let Some(ref bytes) = self.body_bytes {
             return Ok(bytes);
         }
-        let limit = limit.unwrap_or_else(|| self.app.config.body_limit);
+        let limit = limit.unwrap_or_else(|| self.body_limit);
         let limited = http_body_util::Limited::new(&mut self.body, limit);
         let collected = limited.collect().await.map_err(Error::BodyCollect)?;
         let bytes = collected.to_bytes();

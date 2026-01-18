@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 use std::net;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use http::StatusCode;
 use hyper::server::conn::http1;
@@ -28,7 +28,7 @@ pub struct App {
     pub(crate) router: router::Router,
     #[cfg(feature = "minijinja")]
     pub(crate) render_env: minijinja::Environment<'static>,
-    pub(crate) locals: Mutex<AnyMap<dyn SerializableAny>>,
+    pub(crate) locals: RwLock<AnyMap<dyn SerializableAny>>,
     pub(crate) built_router: MatchRouter,
     pub(crate) config: config::Config,
     /// Shutdown timeout in seconds
@@ -47,7 +47,7 @@ impl App {
             router: router::Router::new(),
             #[cfg(feature = "minijinja")]
             render_env: minijinja::Environment::new(),
-            locals: Mutex::new(AnyMap::new()),
+            locals: RwLock::new(AnyMap::new()),
             built_router: MatchRouter::default(),
             config: config::Config::default(),
             shutdown_timeout: std::time::Duration::from_secs(10),
@@ -99,7 +99,7 @@ impl App {
     where
         F: FnOnce(&AnyMap<dyn SerializableAny>),
     {
-        let locals = self.locals.lock().unwrap();
+        let locals = self.locals.read().unwrap();
         f(&locals);
         self
     }
@@ -109,7 +109,7 @@ impl App {
     where
         F: FnOnce(&mut AnyMap<dyn SerializableAny>),
     {
-        let mut locals = self.locals.lock().unwrap();
+        let mut locals = self.locals.write().unwrap();
         f(&mut locals);
         self
     }
@@ -200,7 +200,7 @@ impl Clone for App {
             router: self.router.clone(),
             #[cfg(feature = "minijinja")]
             render_env: self.render_env.clone(),
-            locals: Mutex::new(self.locals.lock().unwrap().clone()),
+            locals: RwLock::new(self.locals.read().unwrap().clone()),
             built_router: MatchRouter::default(),
             config: self.config.clone(),
             shutdown_timeout: self.shutdown_timeout,

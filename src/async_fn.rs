@@ -5,19 +5,33 @@ use std::future::Future;
 macro_rules! impl_async_fn {
     ($n:tt, [$($arg:ident),*]) => {
         paste::paste! {
+            #[allow(non_snake_case)]
             #[allow(unused)]
-            pub trait [<AsyncFn $n>]<$($arg),*>: Fn($($arg),*) -> Self::OutputFuture {
-                type OutputFuture: Future<Output = <Self as [<AsyncFn $n>]<$($arg),*>>::Output> + Send;
-                type Output;
+            pub trait [<AsyncFn $n>]<$($arg),*> {
+                type Output: Send;
+
+                fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send
+                where
+                    Self: Sync,;
             }
 
-            impl<F: ?Sized, Fut, $($arg),*> [<AsyncFn $n>]<$($arg),*> for F
+            #[allow(non_snake_case)]
+            #[allow(unused)]
+            impl<F, Fut, $($arg),*> [<AsyncFn $n>]<$($arg),*> for F
             where
-                F: Fn($($arg),*) -> Fut,
+                F: Fn($($arg),*) -> Fut + Send + Sync,
                 Fut: Future + Send,
+                Fut::Output: Send,
+                $($arg: Send,)*
             {
-                type OutputFuture = Fut;
                 type Output = Fut::Output;
+
+                fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send
+                where
+                    Self: Sync,
+                {
+                    async move { (self)($($arg),*).await }
+                }
             }
         }
     };

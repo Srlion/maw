@@ -37,7 +37,7 @@ where
 {
     type Output = R;
     async fn call(&self, c: &mut Ctx, _: &()) -> Self::Output {
-        (self)(c).await
+        self.call(c).await
     }
 }
 
@@ -49,7 +49,7 @@ where
 {
     type Output = R;
     async fn call(&self, c: &mut Ctx, state: &(S,)) -> Self::Output {
-        (self)(c, state.0.clone()).await
+        self.call(c, state.0.clone()).await
     }
 }
 

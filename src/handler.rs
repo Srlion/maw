@@ -141,13 +141,21 @@ where
 
 #[cfg(debug_assertions)]
 fn caller_location(skip: usize) -> String {
-    let bt = backtrace::Backtrace::new();
-    for frame in bt.frames().iter().skip(skip) {
-        for symbol in frame.symbols() {
-            if let (Some(file), Some(line)) = (symbol.filename(), symbol.lineno()) {
-                return format!("{}:{}", file.display(), line);
-            }
-        }
-    }
-    String::new()
+    let bt = std::backtrace::Backtrace::force_capture();
+    let s = format!("{bt:?}");
+
+    s.split("{ fn: ")
+        .filter_map(|chunk| {
+            let file_start = chunk.find("file: \"")?;
+            let file_end = chunk[file_start + 7..].find('"')?;
+            let file = &chunk[file_start + 7..file_start + 7 + file_end];
+
+            let line_start = chunk.find("line: ")?;
+            let line_end = chunk[line_start + 6..].find(' ')?;
+            let line = &chunk[line_start + 6..line_start + 6 + line_end];
+
+            Some(format!("{file}:{line}"))
+        })
+        .nth(skip)
+        .unwrap_or_default()
 }

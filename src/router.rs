@@ -231,30 +231,56 @@ pub trait AddHandlers {
     ) -> Router;
 }
 
-impl<F, R> AddHandlers for F
+pub trait AddMiddleware {
+    fn add_middleware(self, router: &Router, skip: usize) -> Router;
+}
+
+pub trait IntoHandler {
+    fn into_middleware(self, router: &Router, skip: usize) -> Router;
+    fn into_handler(self, router: &Router, method: Method, skip: usize) -> Router;
+}
+
+impl<F, R> IntoHandler for F
 where
     for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
     R: IntoResponse + Send,
 {
-    fn add_handlers(
-        self,
-        router: &Router,
-        method: Method,
-        path: impl Into<String>,
-        skip: usize,
-    ) -> Router {
-        let group = Router::group(path);
-        let group = group.handle(method, self, (), skip);
-        router.push(group)
+    fn into_middleware(self, router: &Router, skip: usize) -> Router {
+        router.middleware_impl(self, (), skip + 1)
+    }
+
+    fn into_handler(self, router: &Router, method: Method, skip: usize) -> Router {
+        router.handle(method, self, (), skip + 1)
     }
 }
 
-impl<F, R, S> AddHandlers for WithState<F, S>
+impl<F, R, S> IntoHandler for WithState<F, S>
 where
     for<'a> F: AsyncFn2<&'a mut Ctx, S, Output = R> + Send + Sync + 'static,
     R: IntoResponse + Send,
     S: Clone + Send + Sync + 'static,
 {
+    fn into_middleware(self, router: &Router, skip: usize) -> Router {
+        router.middleware_impl(self.1, (self.0,), skip + 1)
+    }
+
+    fn into_handler(self, router: &Router, method: Method, skip: usize) -> Router {
+        router.handle(method, self.1, (self.0,), skip + 1)
+    }
+}
+
+// F1 != (F1,)
+impl<F1: IntoHandler> AddMiddleware for F1 {
+    #[allow(non_snake_case)]
+    fn add_middleware(self, r: &Router, skip: usize) -> Router {
+        self.into_middleware(r, skip)
+    }
+}
+
+impl<F1> AddHandlers for F1
+where
+    F1: IntoHandler,
+{
     fn add_handlers(
         self,
         router: &Router,
@@ -263,23 +289,14 @@ where
         skip: usize,
     ) -> Router {
         let group = Router::group(path);
-        let group = group.handle(method, self.1, (self.0,), skip);
-        router.push(group)
+        router.push(self.into_handler(&group, method, skip))
     }
 }
 
 macro_rules! impl_add_handlers {
-    ($(($($f:ident, $r:ident),+; $last_f:ident, $last_r:ident)),+ $(,)?) => {
+    ($(($($prev:ident),*; $last:ident)),+ $(,)?) => {
         $(
-            impl<$($f, $r,)+ $last_f, $last_r> AddHandlers for ($($f,)+ $last_f,)
-            where
-                $(
-                    for<'a> $f: AsyncFn1<&'a mut Ctx, Output = $r> + Send + Sync + 'static,
-                    $r: IntoResponse + Send,
-                )+
-                for<'a> $last_f: AsyncFn1<&'a mut Ctx, Output = $last_r> + Send + Sync + 'static,
-                $last_r: IntoResponse + Send,
-            {
+            impl<$($prev: IntoHandler,)* $last: IntoHandler> AddHandlers for ($($prev,)* $last,) {
                 fn add_handlers(
                     self,
                     router: &Router,
@@ -288,86 +305,37 @@ macro_rules! impl_add_handlers {
                     skip: usize,
                 ) -> Router {
                     #[allow(non_snake_case)]
-                    let ($($f,)+ $last_f,) = self;
+                    let ($($prev,)* $last,) = self;
+                    let group = Router::group(path);
+                    $(
+                        $prev.into_middleware(&group, skip);
+                    )*
                     router.push(
-                        Router::group(path)
-                            $(.middleware_impl($f, (), skip))+
-                            .handle(method, $last_f, (), skip)
+                        $last.into_handler(&group, method, skip)
                     )
                 }
             }
-        )+
-    };
-}
 
-impl_add_handlers! {
-    (F1, R1; F2, R2),
-    (F1, R1, F2, R2; F3, R3),
-    (F1, R1, F2, R2, F3, R3; F4, R4),
-    (F1, R1, F2, R2, F3, R3, F4, R4; F5, R5),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5; F6, R6),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6; F7, R7),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7; F8, R8),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8; F9, R9),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8, F9, R9; F10, R10),
-}
-
-pub trait AddMiddleware {
-    fn add_middleware(self, router: &Router, skip: usize) -> Router;
-}
-
-impl<F, R> AddMiddleware for F
-where
-    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
-    R: IntoResponse + Send,
-{
-    fn add_middleware(self, router: &Router, skip: usize) -> Router {
-        router.middleware_impl(self, (), skip)
-    }
-}
-
-impl<F, R, S> AddMiddleware for WithState<F, S>
-where
-    for<'a> F: AsyncFn2<&'a mut Ctx, S, Output = R> + Send + Sync + 'static,
-    R: IntoResponse + Send,
-    S: Clone + Send + Sync + 'static,
-{
-    fn add_middleware(self, router: &Router, skip: usize) -> Router {
-        router.middleware_impl(self.1, (self.0,), skip)
-    }
-}
-
-macro_rules! impl_add_middleware {
-    ($(($($f:ident, $r:ident),+)),+ $(,)?) => {
-        $(
-            impl<$($f, $r),+> AddMiddleware for ($($f,)+)
-            where
-                $(
-                    for<'a> $f: AsyncFn1<&'a mut Ctx, Output = $r> + Send + Sync + 'static,
-                    $r: IntoResponse + Send,
-                )+
-            {
-                fn add_middleware(self, router: &Router, skip: usize) -> Router {
-                    #[allow(non_snake_case)]
-                    let ($($f,)+) = self;
-                    let r = router.clone();
-                    $(let r = r.middleware_impl($f, (), skip);)+
-                    r
+            impl<$($prev: IntoHandler,)* $last: IntoHandler> AddMiddleware for ($($prev,)* $last,) {
+                #[allow(non_snake_case)]
+                fn add_middleware(self, r: &Router, skip: usize) -> Router {
+                    let ($($prev,)* $last,) = self;
+                    $( $prev.into_middleware(r, skip); )*
+                    $last.into_middleware(r, skip)
                 }
             }
         )+
     };
 }
-
-impl_add_middleware! {
-    (F1, R1),
-    (F1, R1, F2, R2),
-    (F1, R1, F2, R2, F3, R3),
-    (F1, R1, F2, R2, F3, R3, F4, R4),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8, F9, R9),
-    (F1, R1, F2, R2, F3, R3, F4, R4, F5, R5, F6, R6, F7, R7, F8, R8, F9, R9, F10, R10),
-}
+impl_add_handlers!(
+    (; F1),
+    (F1; F2),
+    (F1, F2; F3),
+    (F1, F2, F3; F4),
+    (F1, F2, F3, F4; F5),
+    (F1, F2, F3, F4, F5; F6),
+    (F1, F2, F3, F4, F5, F6; F7),
+    (F1, F2, F3, F4, F5, F6, F7; F8),
+    (F1, F2, F3, F4, F5, F6, F7, F8; F9),
+    (F1, F2, F3, F4, F5, F6, F7, F8, F9; F10),
+);

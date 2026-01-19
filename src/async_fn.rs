@@ -8,9 +8,8 @@ macro_rules! impl_async_fn {
             #[allow(non_snake_case)]
             pub trait [<AsyncFn $n>]<$($arg),*> {
                 type Output;
-                type Future: Future<Output = Self::Output> + Send;
 
-                fn call(&self, $($arg: $arg),*) -> Self::Future;
+                fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send;
             }
 
             #[allow(non_snake_case)]
@@ -20,9 +19,8 @@ macro_rules! impl_async_fn {
                 Fut: Future + Send,
             {
                 type Output = Fut::Output;
-                type Future = Fut;
 
-                fn call(&self, $($arg: $arg),*) -> Self::Future {
+                fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send {
                     (self)($($arg),*)
                 }
             }

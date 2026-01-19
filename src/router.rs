@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, Mutex},
 };
 
@@ -114,8 +114,8 @@ impl Router {
     }
 
     #[inline(never)]
-    fn flatten_routers(&self) -> HashMap<String, Handlers> {
-        let mut out = HashMap::default();
+    fn flatten_routers(&self) -> BTreeMap<String, Handlers> {
+        let mut out = BTreeMap::default();
         Self::walk("", self, &[], &mut out);
         out
     }
@@ -125,7 +125,7 @@ impl Router {
         base: &str,
         router: &Router,
         inherited_mw: &[Handler],
-        out: &mut HashMap<String, Handlers>,
+        out: &mut BTreeMap<String, Handlers>,
     ) {
         let path = join_paths(base, &router.path);
 

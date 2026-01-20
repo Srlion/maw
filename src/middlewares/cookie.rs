@@ -177,10 +177,13 @@ pub struct CookieMiddleware {
 }
 
 impl CookieMiddleware {
-    pub fn new(key: Option<impl Into<CookieKey>>) -> Self {
-        Self {
-            key: key.map(|k| k.into().into_cookie_key()),
-        }
+    pub fn new() -> Self {
+        Self { key: None }
+    }
+
+    pub fn with_key(&mut self, key: impl Into<CookieKey>) -> &mut Self {
+        self.key = Some(key.into().into_cookie_key());
+        self
     }
 }
 

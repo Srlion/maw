@@ -11,7 +11,7 @@ const CSRF_HEADER: &str = "X-CSRF-Token";
 #[derive(Clone, Copy, Debug)]
 pub enum CsrfStorage {
     Cookie,
-    #[cfg(feature = "session")]
+    #[cfg(feature = "middleware-session")]
     Session,
 }
 
@@ -126,7 +126,7 @@ impl AsyncFn1<&mut Ctx> for CsrfMiddleware {
                     );
                     token
                 }),
-            #[cfg(feature = "session")]
+            #[cfg(feature = "middleware-session")]
             CsrfStorage::Session => c.session.get::<String>(&self.key_name).unwrap_or_else(|| {
                 let token = generate_token();
                 c.session.set(&self.key_name, token.clone());

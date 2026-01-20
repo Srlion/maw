@@ -9,22 +9,25 @@ authors = ["Srlion <srlion32@gmail.com>"]
 
 [features]
 default = []
-cookie = ["dep:cookie"]
-session = ["cookie", "serde/derive"]
-logging = []
+
 xml = ["dep:quick-xml"]
 minijinja = ["dep:minijinja", "dep:erased-serde"]
-csrf = ["cookie", "dep:rand", "dep:constant_time_eq"]
-catch_panic = []
-full = [
-    "cookie",
-    "session",
-    "logging",
-    "xml",
-    "minijinja",
-    "csrf",
-    "catch_panic",
+
+middleware-cookie = ["dep:cookie"]
+middleware-session = ["middleware-cookie", "serde/derive"]
+middleware-logging = []
+middleware-csrf = ["middleware-cookie", "dep:rand", "dep:constant_time_eq"]
+middleware-catch_panic = []
+
+middleware = [
+    "middleware-cookie",
+    "middleware-session",
+    "middleware-logging",
+    "middleware-csrf",
+    "middleware-catch_panic",
 ]
+
+full = ["xml", "minijinja", "middleware"]
 
 [dependencies]
 matchit = "0.9"

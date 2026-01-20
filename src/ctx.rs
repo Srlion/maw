@@ -7,9 +7,9 @@ pub struct Ctx {
     pub res: Response,
     pub(crate) handlers: Arc<[Handler]>,
     pub(crate) index_handler: usize,
-    #[cfg(feature = "cookie")]
+    #[cfg(feature = "middleware-cookie")]
     pub cookies: crate::middlewares::cookie::CookieStore,
-    #[cfg(feature = "session")]
+    #[cfg(feature = "middleware-session")]
     pub session: crate::middlewares::session::SessionStore,
 }
 
@@ -20,9 +20,9 @@ impl Ctx {
             res,
             handlers,
             index_handler: 0,
-            #[cfg(feature = "cookie")]
+            #[cfg(feature = "middleware-cookie")]
             cookies: Default::default(),
-            #[cfg(feature = "session")]
+            #[cfg(feature = "middleware-session")]
             session: Default::default(),
         }
     }

@@ -6,7 +6,6 @@ pub use hyper;
 mod any_value_map;
 mod app;
 mod async_fn;
-pub mod body_limit;
 
 mod ctx;
 mod error;
@@ -32,6 +31,9 @@ pub mod middlewares {
 
     #[cfg(feature = "middleware-catch_panic")]
     pub(crate) mod catch_panic;
+
+    #[cfg(feature = "middleware-body_limit")]
+    pub(crate) mod body_limit;
 }
 
 #[cfg(feature = "middleware-cookie")]
@@ -48,6 +50,9 @@ pub use middlewares::logging::LoggingMiddleware;
 
 #[cfg(feature = "middleware-catch_panic")]
 pub use middlewares::catch_panic::CatchPanicMiddleware;
+
+#[cfg(feature = "middleware-body_limit")]
+pub use middlewares::body_limit::BodyLimitMiddleware;
 
 pub fn all() -> http::Method {
     http::Method::from_bytes(b"*******").expect("failed to create ALL method") // should never happen

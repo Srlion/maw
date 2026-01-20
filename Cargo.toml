@@ -18,6 +18,7 @@ middleware-session = ["middleware-cookie", "serde/derive"]
 middleware-logging = []
 middleware-csrf = ["middleware-cookie", "dep:rand", "dep:constant_time_eq"]
 middleware-catch_panic = []
+middleware-body_limit = []
 
 middleware = [
     "middleware-cookie",
@@ -25,6 +26,7 @@ middleware = [
     "middleware-logging",
     "middleware-csrf",
     "middleware-catch_panic",
+    "middleware-body_limit",
 ]
 
 full = ["xml", "minijinja", "middleware"]

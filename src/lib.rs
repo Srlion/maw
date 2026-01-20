@@ -12,8 +12,6 @@ mod ctx;
 mod error;
 mod handler;
 mod into_response;
-#[cfg(feature = "logging")]
-pub mod logging;
 mod request;
 mod response;
 mod router;
@@ -28,6 +26,9 @@ pub mod middlewares {
 
     #[cfg(feature = "csrf")]
     pub mod csrf;
+
+    #[cfg(feature = "logging")]
+    pub(crate) mod logging;
 }
 
 #[cfg(feature = "cookie")]
@@ -38,6 +39,9 @@ pub use middlewares::session::SessionMiddleware;
 
 #[cfg(feature = "csrf")]
 pub use middlewares::csrf::CsrfMiddleware;
+
+#[cfg(feature = "logging")]
+pub use middlewares::logging::LoggingMiddleware;
 
 pub fn all() -> http::Method {
     http::Method::from_bytes(b"*******").expect("failed to create ALL method") // should never happen

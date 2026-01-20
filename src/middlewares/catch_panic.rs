@@ -41,11 +41,7 @@ impl AsyncFn1<&mut Ctx> for CatchPanicMiddleware<NoPanicHandler> {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {
-        if let Err(e) = (CatchUnwind {
-            future: AssertUnwindSafe(c.next()),
-        })
-        .await
-        {
+        if let Err(e) = CatchUnwind::new(AssertUnwindSafe(c.next())).await {
             let panic_msg = extract_panic_message(&e);
             tracing::error!(error = %panic_msg, "panic occurred");
             c.res.status(StatusCode::INTERNAL_SERVER_ERROR);
@@ -60,11 +56,7 @@ where
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {
-        if let Err(e) = (CatchUnwind {
-            future: AssertUnwindSafe(c.next()),
-        })
-        .await
-        {
+        if let Err(e) = CatchUnwind::new(AssertUnwindSafe(c.next())).await {
             self.on_panic.call(c, e).await;
         }
     }
@@ -81,6 +73,12 @@ pin_project! {
     pub struct CatchUnwind<F> {
         #[pin]
         future: F,
+    }
+}
+
+impl<F> CatchUnwind<F> {
+    pub fn new(future: F) -> Self {
+        Self { future }
     }
 }
 

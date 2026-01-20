@@ -17,7 +17,7 @@ middleware-cookie = ["dep:cookie"]
 middleware-session = ["middleware-cookie", "serde/derive"]
 middleware-logging = []
 middleware-csrf = ["middleware-cookie", "dep:rand", "dep:constant_time_eq"]
-middleware-catch_panic = []
+middleware-catch_panic = ["dep:pin-project-lite"]
 middleware-body_limit = []
 
 middleware = [
@@ -66,3 +66,4 @@ rand = { version = "0.9.2", optional = true, default-features = false, features 
     "thread_rng",
 ] }
 constant_time_eq = { version = "0.4.2", optional = true }
+pin-project-lite = { version = "0.2.16", optional = true }

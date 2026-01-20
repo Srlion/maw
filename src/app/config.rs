@@ -12,9 +12,6 @@ pub struct Config {
     ///
     /// Default: ""
     pub(crate) proxy_header: String,
-
-    #[cfg(feature = "cookie")]
-    pub(crate) cookie_key: cookie::Key,
 }
 
 impl Config {
@@ -41,14 +38,6 @@ impl Config {
         self.proxy_header = header.into();
         self
     }
-
-    /// Set the cookie key used for signing/encrypting cookies
-    /// This is required if you are using signed or encrypted cookies
-    #[cfg(feature = "cookie")]
-    pub fn cookie_key(mut self, key: impl Into<Vec<u8>>) -> Self {
-        self.cookie_key = cookie::Key::from(&key.into());
-        self
-    }
 }
 
 impl Default for Config {
@@ -56,8 +45,6 @@ impl Default for Config {
         Self {
             body_limit: 4 * 1024 * 1024,
             proxy_header: String::new(),
-            #[cfg(feature = "cookie")]
-            cookie_key: cookie::Key::generate(),
         }
     }
 }

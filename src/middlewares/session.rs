@@ -5,8 +5,8 @@ use serde_json::Value;
 
 use crate::{
     async_fn::AsyncFn1,
-    cookie::{CookieOptions, CookieType},
     ctx::Ctx,
+    middlewares::cookie::{CookieOptions, CookieType},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -17,10 +17,6 @@ pub struct SessionStore {
 }
 
 impl SessionStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Get a value from the session
     pub fn get<T: DeserializeOwned>(&self, key: impl AsRef<str>) -> Option<T> {
         self.data
@@ -71,7 +67,7 @@ impl SessionStore {
 
 /// Has to be used after cookie middleware
 #[derive(Clone, Debug)]
-pub struct Session {
+pub struct SessionMiddleware {
     /// Name of the session cookie
     ///
     /// Default: "maw.session"
@@ -84,7 +80,7 @@ pub struct Session {
     cookie_options: CookieOptions,
 }
 
-impl Session {
+impl SessionMiddleware {
     /// Create a new SessionConfig with default values
     pub fn new() -> Self {
         Self::default()
@@ -102,6 +98,10 @@ impl Session {
     ///
     /// Default: CookieType::Signed
     pub fn cookie_type(mut self, cookie_type: CookieType) -> Self {
+        assert!(
+            !matches!(cookie_type, CookieType::Plain),
+            "Session cookie type cannot be Plain for security reasons"
+        );
         self.cookie_type = cookie_type;
         self
     }
@@ -113,7 +113,7 @@ impl Session {
     }
 }
 
-impl Default for Session {
+impl Default for SessionMiddleware {
     fn default() -> Self {
         Self {
             cookie_name: "maw.session".to_string(),
@@ -127,14 +127,15 @@ impl Default for Session {
     }
 }
 
-impl AsyncFn1<&mut Ctx> for Session {
+impl AsyncFn1<&mut Ctx> for SessionMiddleware {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {
         // Load session from cookie
         {
             let session = c
-                .get_cookie::<SessionStore>(&self.cookie_name, self.cookie_type)
+                .cookies
+                .get_typed::<SessionStore>(&self.cookie_name, &self.cookie_type)
                 .ok()
                 .flatten()
                 .unwrap_or_default();
@@ -147,10 +148,14 @@ impl AsyncFn1<&mut Ctx> for Session {
         // Save session to cookie if modified
         if c.session.is_modified() {
             let cookie_name = &self.cookie_name.clone();
-            let cookie_type = self.cookie_type;
             let cookie_options = self.cookie_options.clone();
             let session = std::mem::take(&mut c.session);
-            c.set_cookie(cookie_name, &session, cookie_type, Some(cookie_options));
+            c.cookies.set_typed(
+                cookie_name,
+                &session,
+                &self.cookie_type,
+                Some(cookie_options),
+            );
         }
     }
 }

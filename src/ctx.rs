@@ -8,7 +8,7 @@ pub struct Ctx {
     pub(crate) handlers: Arc<[Handler]>,
     pub(crate) index_handler: usize,
     #[cfg(feature = "cookie")]
-    pub cookies: cookie::CookieJar,
+    pub cookies: crate::middlewares::cookie::CookieStore,
     #[cfg(feature = "session")]
     pub session: crate::middlewares::session::SessionStore,
 }

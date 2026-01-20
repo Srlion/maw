@@ -1,8 +1,8 @@
 use http::{Method, StatusCode};
 
 use crate::{
-    cookie::{CookieOptions, CookieType},
     ctx::Ctx,
+    middlewares::cookie::{CookieOptions, CookieType},
 };
 
 const CSRF_HEADER: &str = "X-CSRF-Token";
@@ -33,7 +33,7 @@ impl Default for CsrfConfig {
             cookie_options: CookieOptions::new()
                 .path("/")
                 .http_only(true)
-                .same_site(crate::cookie::SameSite::Strict),
+                .same_site(crate::middlewares::cookie::SameSite::Strict),
         }
     }
 }
@@ -109,15 +109,16 @@ pub fn middleware(
 
             let token = match config.storage {
                 CsrfStorage::Cookie => c
-                    .get_cookie::<String>(&config.key_name, crate::cookie::CookieType::Signed)
+                    .cookies
+                    .get_typed::<String>(&config.key_name, &config.cookie_type)
                     .ok()
                     .flatten()
                     .unwrap_or_else(|| {
                         let token = generate_token();
-                        c.set_cookie(
+                        c.cookies.set_typed(
                             &config.key_name,
                             &token,
-                            config.cookie_type,
+                            &config.cookie_type,
                             Some(config.cookie_options.clone()),
                         );
                         token

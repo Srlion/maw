@@ -20,9 +20,14 @@ pub mod logging;
 mod request;
 mod response;
 mod router;
-#[cfg(feature = "session")]
-pub mod session;
 mod status_error;
+
+pub mod middlewares {
+    #[cfg(feature = "session")]
+    pub(crate) mod session;
+    #[cfg(feature = "session")]
+    pub use session::Session;
+}
 
 pub fn all() -> http::Method {
     http::Method::from_bytes(b"*******").expect("failed to create ALL method") // should never happen
@@ -45,6 +50,4 @@ pub mod prelude {
 pub use crate::into_response::IntoResponse;
 pub use crate::response::{BoxError, HttpBody};
 pub use app::config::Config;
-#[cfg(feature = "session")]
-pub use session::SessionConfig;
 pub use tokio_util::sync::CancellationToken;

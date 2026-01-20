@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-#[cfg(feature = "session")]
-use crate::session::Session;
 use crate::{app::App, handler::Handler, request::Request, response::Response};
 
 pub struct Ctx {
@@ -12,7 +10,7 @@ pub struct Ctx {
     #[cfg(feature = "cookie")]
     pub cookies: cookie::CookieJar,
     #[cfg(feature = "session")]
-    pub session: Session,
+    pub session: crate::middlewares::session::SessionStore,
 }
 
 impl Ctx {
@@ -25,7 +23,7 @@ impl Ctx {
             #[cfg(feature = "cookie")]
             cookies: Default::default(),
             #[cfg(feature = "session")]
-            session: Session::new(),
+            session: Default::default(),
         }
     }
 

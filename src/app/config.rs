@@ -1,6 +1,3 @@
-#[cfg(feature = "session")]
-use crate::session::SessionConfig;
-
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Max body size that the server accepts.
@@ -18,9 +15,6 @@ pub struct Config {
 
     #[cfg(feature = "cookie")]
     pub(crate) cookie_key: cookie::Key,
-
-    #[cfg(feature = "session")]
-    pub(crate) session: SessionConfig,
 }
 
 impl Config {
@@ -55,13 +49,6 @@ impl Config {
         self.cookie_key = cookie::Key::from(&key.into());
         self
     }
-
-    /// Set the session configuration
-    #[cfg(feature = "session")]
-    pub fn session(mut self, config: SessionConfig) -> Self {
-        self.session = config;
-        self
-    }
 }
 
 impl Default for Config {
@@ -71,8 +58,6 @@ impl Default for Config {
             proxy_header: String::new(),
             #[cfg(feature = "cookie")]
             cookie_key: cookie::Key::generate(),
-            #[cfg(feature = "session")]
-            session: SessionConfig::default(),
         }
     }
 }

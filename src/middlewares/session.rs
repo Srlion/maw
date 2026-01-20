@@ -4,18 +4,19 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
 use crate::{
+    async_fn::AsyncFn1,
     cookie::{CookieOptions, CookieType},
     ctx::Ctx,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct Session {
+pub struct SessionStore {
     data: HashMap<String, Value>,
     #[serde(skip)]
     modified: bool,
 }
 
-impl Session {
+impl SessionStore {
     pub fn new() -> Self {
         Self::default()
     }
@@ -69,34 +70,8 @@ impl Session {
 }
 
 /// Has to be used after cookie middleware
-pub async fn middleware(c: &mut Ctx) {
-    // Load session from cookie
-    {
-        let session_config = &c.app().config.session;
-        let session = c
-            .get_cookie::<Session>(&session_config.cookie_name, session_config.cookie_type)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-
-        c.session = session;
-    }
-
-    c.next().await;
-
-    // Save session to cookie if modified
-    if c.session.is_modified() {
-        let session_config = &c.app().config.session;
-        let cookie_name = &session_config.cookie_name.clone();
-        let cookie_type = session_config.cookie_type;
-        let cookie_options = session_config.cookie_options.clone();
-        let session = std::mem::take(&mut c.session);
-        c.set_cookie(cookie_name, &session, cookie_type, Some(cookie_options));
-    }
-}
-
 #[derive(Clone, Debug)]
-pub struct SessionConfig {
+pub struct Session {
     /// Name of the session cookie
     ///
     /// Default: "maw.session"
@@ -109,7 +84,7 @@ pub struct SessionConfig {
     cookie_options: CookieOptions,
 }
 
-impl SessionConfig {
+impl Session {
     /// Create a new SessionConfig with default values
     pub fn new() -> Self {
         Self::default()
@@ -138,7 +113,7 @@ impl SessionConfig {
     }
 }
 
-impl Default for SessionConfig {
+impl Default for Session {
     fn default() -> Self {
         Self {
             cookie_name: "maw.session".to_string(),
@@ -148,6 +123,34 @@ impl Default for SessionConfig {
                 .http_only(true)
                 .secure(true)
                 .same_site(cookie::SameSite::Lax),
+        }
+    }
+}
+
+impl AsyncFn1<&mut Ctx> for Session {
+    type Output = ();
+
+    async fn call(&self, c: &mut Ctx) -> Self::Output {
+        // Load session from cookie
+        {
+            let session = c
+                .get_cookie::<SessionStore>(&self.cookie_name, self.cookie_type)
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+
+            c.session = session;
+        }
+
+        c.next().await;
+
+        // Save session to cookie if modified
+        if c.session.is_modified() {
+            let cookie_name = &self.cookie_name.clone();
+            let cookie_type = self.cookie_type;
+            let cookie_options = self.cookie_options.clone();
+            let session = std::mem::take(&mut c.session);
+            c.set_cookie(cookie_name, &session, cookie_type, Some(cookie_options));
         }
     }
 }

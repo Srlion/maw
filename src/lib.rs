@@ -8,8 +8,6 @@ mod app;
 mod async_fn;
 pub mod body_limit;
 
-#[cfg(feature = "csrf")]
-pub mod csrf;
 mod ctx;
 mod error;
 mod handler;
@@ -27,6 +25,9 @@ pub mod middlewares {
 
     #[cfg(feature = "session")]
     pub(crate) mod session;
+
+    #[cfg(feature = "csrf")]
+    pub mod csrf;
 }
 
 #[cfg(feature = "cookie")]
@@ -34,6 +35,9 @@ pub use middlewares::cookie::CookieMiddleware;
 
 #[cfg(feature = "session")]
 pub use middlewares::session::SessionMiddleware;
+
+#[cfg(feature = "csrf")]
+pub use middlewares::csrf::CsrfMiddleware;
 
 pub fn all() -> http::Method {
     http::Method::from_bytes(b"*******").expect("failed to create ALL method") // should never happen

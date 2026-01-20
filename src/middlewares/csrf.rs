@@ -1,6 +1,7 @@
 use http::{Method, StatusCode};
 
 use crate::{
+    async_fn::AsyncFn1,
     ctx::Ctx,
     middlewares::cookie::{CookieOptions, CookieType},
 };
@@ -14,8 +15,9 @@ pub enum CsrfStorage {
     Session,
 }
 
+/// Has to be added after the CookieMiddleware or SessionMiddleware
 #[derive(Clone, Debug)]
-pub struct CsrfConfig {
+pub struct CsrfMiddleware {
     storage: CsrfStorage,
     key_name: String,
     safe_methods: Vec<Method>,
@@ -23,7 +25,7 @@ pub struct CsrfConfig {
     cookie_options: CookieOptions,
 }
 
-impl Default for CsrfConfig {
+impl Default for CsrfMiddleware {
     fn default() -> Self {
         Self {
             storage: CsrfStorage::Cookie,
@@ -38,7 +40,7 @@ impl Default for CsrfConfig {
     }
 }
 
-impl CsrfConfig {
+impl CsrfMiddleware {
     pub fn new() -> Self {
         Self::default()
     }
@@ -59,6 +61,10 @@ impl CsrfConfig {
     }
 
     pub fn cookie_type(mut self, cookie_type: CookieType) -> Self {
+        assert!(
+            !matches!(cookie_type, CookieType::Plain),
+            "Session cookie type cannot be Plain for security reasons"
+        );
         self.cookie_type = cookie_type;
         self
     }
@@ -96,63 +102,55 @@ impl Ctx {
     }
 }
 
-pub fn middleware(
-    config: CsrfConfig,
-) -> impl Fn(&mut Ctx) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> + Clone
-{
-    move |c: &mut Ctx| {
-        let config = config.clone();
-        Box::pin(async move {
-            c.res.locals.insert("csrf_header", CSRF_HEADER);
+impl AsyncFn1<&mut Ctx> for CsrfMiddleware {
+    type Output = ();
 
-            let is_safe = config.safe_methods.contains(c.req.method());
+    async fn call(&self, c: &mut Ctx) -> Self::Output {
+        c.res.locals.insert("csrf_header", CSRF_HEADER);
 
-            let token = match config.storage {
-                CsrfStorage::Cookie => c
-                    .cookies
-                    .get_typed::<String>(&config.key_name, &config.cookie_type)
-                    .ok()
-                    .flatten()
-                    .unwrap_or_else(|| {
-                        let token = generate_token();
-                        c.cookies.set_typed(
-                            &config.key_name,
-                            &token,
-                            &config.cookie_type,
-                            Some(config.cookie_options.clone()),
-                        );
-                        token
-                    }),
-                #[cfg(feature = "session")]
-                CsrfStorage::Session => {
-                    c.session
-                        .get::<String>(&config.key_name)
-                        .unwrap_or_else(|| {
-                            let token = generate_token();
-                            c.session.set(&config.key_name, token.clone());
-                            token
-                        })
-                }
-            };
+        let is_safe = self.safe_methods.contains(c.req.method());
 
-            if !is_safe {
-                let submitted_token = c.req.get(CSRF_HEADER);
-                let is_valid = submitted_token
-                    .as_ref()
-                    .map(|submitted| {
-                        constant_time_eq::constant_time_eq(submitted.as_bytes(), token.as_bytes())
-                    })
-                    .unwrap_or(false);
+        let token = match self.storage {
+            CsrfStorage::Cookie => c
+                .cookies
+                .get_typed::<String>(&self.key_name, &self.cookie_type)
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    let token = generate_token();
+                    c.cookies.set_typed(
+                        &self.key_name,
+                        &token,
+                        &self.cookie_type,
+                        Some(self.cookie_options.clone()),
+                    );
+                    token
+                }),
+            #[cfg(feature = "session")]
+            CsrfStorage::Session => c.session.get::<String>(&self.key_name).unwrap_or_else(|| {
+                let token = generate_token();
+                c.session.set(&self.key_name, token.clone());
+                token
+            }),
+        };
 
-                if !is_valid {
-                    c.res.send_status(StatusCode::FORBIDDEN);
-                    return;
-                }
+        if !is_safe {
+            let submitted_token = c.req.get(CSRF_HEADER);
+            let is_valid = submitted_token
+                .as_ref()
+                .map(|submitted| {
+                    constant_time_eq::constant_time_eq(submitted.as_bytes(), token.as_bytes())
+                })
+                .unwrap_or(false);
+
+            if !is_valid {
+                c.res.send_status(StatusCode::FORBIDDEN);
+                return;
             }
+        }
 
-            c.req.locals.insert("csrf_token", token);
+        c.req.locals.insert("csrf_token", token);
 
-            c.next().await;
-        })
+        c.next().await;
     }
 }

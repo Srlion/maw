@@ -15,7 +15,16 @@ logging = []
 xml = ["dep:quick-xml"]
 minijinja = ["dep:minijinja", "dep:erased-serde"]
 csrf = ["cookie", "dep:rand", "dep:constant_time_eq"]
-full = ["cookie", "session", "logging", "xml", "minijinja", "csrf"]
+catch_panic = []
+full = [
+    "cookie",
+    "session",
+    "logging",
+    "xml",
+    "minijinja",
+    "csrf",
+    "catch_panic",
+]
 
 [dependencies]
 matchit = "0.9"

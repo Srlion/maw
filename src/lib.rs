@@ -29,6 +29,9 @@ pub mod middlewares {
 
     #[cfg(feature = "logging")]
     pub(crate) mod logging;
+
+    #[cfg(feature = "catch_panic")]
+    pub(crate) mod catch_panic;
 }
 
 #[cfg(feature = "cookie")]
@@ -42,6 +45,9 @@ pub use middlewares::csrf::CsrfMiddleware;
 
 #[cfg(feature = "logging")]
 pub use middlewares::logging::LoggingMiddleware;
+
+#[cfg(feature = "catch_panic")]
+pub use middlewares::catch_panic::CatchPanicMiddleware;
 
 pub fn all() -> http::Method {
     http::Method::from_bytes(b"*******").expect("failed to create ALL method") // should never happen

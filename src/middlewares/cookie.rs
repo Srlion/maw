@@ -26,33 +26,27 @@ impl CookieStore {
     }
 
     pub fn get<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, Error> {
-        let value = self.jar.get(name).map(|c| c.value().to_owned());
-        value
-            .map(|v| serde_json::from_str(&v))
+        self.jar
+            .get(name)
+            .map(|c| serde_json::from_str(c.value()))
             .transpose()
             .map_err(Error::from)
     }
 
     pub fn get_signed<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, Error> {
-        let value = self
-            .jar
+        self.jar
             .signed(self.key())
             .get(name)
-            .map(|c| c.value().to_owned());
-        value
-            .map(|v| serde_json::from_str(&v))
+            .map(|c| serde_json::from_str(c.value()))
             .transpose()
             .map_err(Error::from)
     }
 
     pub fn get_encrypted<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, Error> {
-        let value = self
-            .jar
+        self.jar
             .private(self.key())
             .get(name)
-            .map(|c| c.value().to_owned());
-        value
-            .map(|v| serde_json::from_str(&v))
+            .map(|c| serde_json::from_str(c.value()))
             .transpose()
             .map_err(Error::from)
     }

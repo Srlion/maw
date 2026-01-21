@@ -62,6 +62,7 @@ pub static ALL: LazyLock<http::Method> = LazyLock::new(all);
 
 pub mod prelude {
     pub use crate::app::App;
+    pub use crate::async_fn::AsyncFn1 as Handler;
     pub use crate::ctx::Ctx;
     pub use crate::error::Error as MawError;
     pub use crate::router::{Router, WithState};
@@ -75,5 +76,4 @@ pub mod prelude {
 pub use crate::into_response::IntoResponse;
 pub use crate::response::{BoxError, HttpBody};
 pub use app::config::Config;
-pub use async_fn::AsyncFn1 as Handler;
 pub use tokio_util::sync::CancellationToken;

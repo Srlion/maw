@@ -3,6 +3,7 @@ use std::{any::Any, fmt::Debug, pin::Pin, sync::Arc};
 use http::Method;
 
 use crate::{
+    app::App,
     async_fn::{AsyncFn1, AsyncFn2},
     ctx::Ctx,
     into_response::IntoResponse,
@@ -28,6 +29,7 @@ impl std::fmt::Display for HandlerType {
 pub trait HandlerCall<S>: Send + Sync {
     type Output: IntoResponse + Send;
     fn call(&self, c: &mut Ctx, state: &S) -> impl Future<Output = Self::Output> + Send;
+    fn on_app_listen(&self, _: &Arc<App>) {}
 }
 
 impl<F, R> HandlerCall<()> for F
@@ -38,6 +40,10 @@ where
     type Output = R;
     async fn call(&self, c: &mut Ctx, _: &()) -> Self::Output {
         self.call(c).await
+    }
+
+    fn on_app_listen(&self, a: &Arc<App>) {
+        self.on_app_listen(a);
     }
 }
 
@@ -50,6 +56,10 @@ where
     type Output = R;
     async fn call(&self, c: &mut Ctx, state: &(S,)) -> Self::Output {
         self.call(c, state.0.clone()).await
+    }
+
+    fn on_app_listen(&self, a: &Arc<App>) {
+        self.on_app_listen(a);
     }
 }
 
@@ -105,6 +115,10 @@ pub trait HandlerRun: Send + Sync + Debug {
 
     fn handler_type(&self) -> &HandlerType;
     fn state(&self) -> &dyn Any;
+    fn on_app_listen(&self, _: &Arc<crate::app::App>);
+    fn type_id(&self) -> std::any::TypeId
+    where
+        Self: 'static;
 }
 
 impl dyn HandlerRun {
@@ -136,6 +150,17 @@ where
 
     fn state(&self) -> &dyn Any {
         &self.state
+    }
+
+    fn on_app_listen(&self, app: &Arc<crate::app::App>) {
+        self.f.on_app_listen(app);
+    }
+
+    fn type_id(&self) -> std::any::TypeId
+    where
+        Self: 'static,
+    {
+        self.f.type_id()
     }
 }
 

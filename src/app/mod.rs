@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     convert::Infallible,
     net,
     sync::{Arc, RwLock},
@@ -142,7 +143,9 @@ impl App {
         A: net::ToSocketAddrs + std::fmt::Debug + 'static,
     {
         self.built_router = self.router.build()?;
+
         let arc_app = Arc::new(self);
+        arc_app.call_app_listen_hooks();
 
         let addr = addr
             .to_socket_addrs()?
@@ -191,6 +194,18 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn call_app_listen_hooks(self: &Arc<App>) {
+        let mut called = HashSet::new();
+
+        self.router
+            .flatten_routers()
+            .iter()
+            .flat_map(|(_, m)| m.values())
+            .flat_map(|h| h.iter())
+            .filter(|h| called.insert(h.type_id()))
+            .for_each(|h| h.on_app_listen(self));
     }
 }
 

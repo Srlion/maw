@@ -1,6 +1,8 @@
 // Thanks to https://github.com/steffahn/async_fn_traits
 
-use std::future::Future;
+use std::{future::Future, sync::Arc};
+
+use crate::app::App;
 
 macro_rules! impl_async_fn {
     ($n:tt, [$($arg:ident),*]) => {
@@ -10,6 +12,8 @@ macro_rules! impl_async_fn {
                 type Output;
 
                 fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send;
+
+                fn on_app_listen(&self, _: &Arc<App>) {}
             }
 
             #[allow(non_snake_case)]

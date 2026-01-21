@@ -114,7 +114,7 @@ impl Router {
     }
 
     #[inline(never)]
-    fn flatten_routers(&self) -> BTreeMap<String, Handlers> {
+    pub(crate) fn flatten_routers(&self) -> BTreeMap<String, Handlers> {
         let mut out = BTreeMap::default();
         Self::walk("", self, &[], &mut out);
         out

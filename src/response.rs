@@ -290,12 +290,10 @@ impl Response {
             Error::from(e)
         })?;
 
-        let rendered = template.render(&c).map_err(|e| {
+        template.render(&c).map_err(|e| {
             tracing::warn!("failed to render template {}: {}", template.name(), e);
             Error::from(e)
-        })?;
-
-        Ok(rendered)
+        })
     }
 
     #[cfg(feature = "minijinja")]

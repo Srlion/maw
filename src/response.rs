@@ -78,12 +78,11 @@ impl HttpBodyTrait for HttpBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        let this = self.get_mut();
-        match this {
+        match self.get_mut() {
             HttpBody::Empty => Poll::Ready(None),
             HttpBody::Full(full) => Pin::new(full)
                 .poll_frame(cx)
-                .map(|opt| opt.map(|res| res.map_err(|never| match never {}))),
+                .map(|opt| opt.map(|res| res.map_err(Into::into))),
             HttpBody::Stream(kind) => match kind {
                 // Wrap bytes into data frames
                 StreamKind::Bytes(stream) => match stream.as_mut().poll_next(cx) {

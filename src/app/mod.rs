@@ -1,3 +1,5 @@
+#[cfg(feature = "minijinja")]
+use std::borrow::Cow;
 use std::{
     collections::HashSet,
     convert::Infallible,
@@ -28,7 +30,7 @@ type HttpResponse = http::Response<HttpBody>;
 pub struct App {
     pub(crate) router: router::Router,
     #[cfg(feature = "minijinja")]
-    pub(crate) render_env: minijinja::Environment<'static>,
+    pub render_env: minijinja::Environment<'static>,
     pub(crate) locals: RwLock<AnyMap<dyn SerializableAny>>,
     pub(crate) built_router: MatchRouter,
     pub(crate) config: config::Config,
@@ -75,7 +77,17 @@ impl App {
     }
 
     #[cfg(feature = "minijinja")]
-    pub fn render_env_filter<N, F, Rv, Args>(mut self, name: N, f: F) -> Self
+    pub fn render_env_add_global(
+        mut self,
+        name: impl Into<Cow<'static, str>>,
+        value: impl Into<minijinja::value::Value>,
+    ) -> Self {
+        self.render_env.add_global(name.into(), value.into());
+        self
+    }
+
+    #[cfg(feature = "minijinja")]
+    pub fn render_env_add_filter<N, F, Rv, Args>(mut self, name: N, f: F) -> Self
     where
         N: Into<std::borrow::Cow<'static, str>>,
         F: minijinja::functions::Function<Rv, Args>,

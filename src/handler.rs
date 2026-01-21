@@ -29,7 +29,9 @@ impl std::fmt::Display for HandlerType {
 pub trait HandlerCall<S>: Send + Sync {
     type Output: IntoResponse + Send;
     fn call(&self, c: &mut Ctx, state: &S) -> impl Future<Output = Self::Output> + Send;
-    fn on_app_listen(&self, _: &Arc<App>) {}
+
+    fn on_app_listen_mut(&self, _: &mut App) {}
+    fn on_app_listen_arc(&self, _: &Arc<App>) {}
 }
 
 impl<F, R> HandlerCall<()> for F
@@ -42,8 +44,12 @@ where
         self.call(c).await
     }
 
-    fn on_app_listen(&self, a: &Arc<App>) {
-        self.on_app_listen(a);
+    fn on_app_listen_mut(&self, a: &mut App) {
+        self.on_app_listen_mut(a);
+    }
+
+    fn on_app_listen_arc(&self, a: &Arc<App>) {
+        self.on_app_listen_arc(a);
     }
 }
 
@@ -56,10 +62,6 @@ where
     type Output = R;
     async fn call(&self, c: &mut Ctx, state: &(S,)) -> Self::Output {
         self.call(c, state.0.clone()).await
-    }
-
-    fn on_app_listen(&self, a: &Arc<App>) {
-        self.on_app_listen(a);
     }
 }
 
@@ -115,7 +117,10 @@ pub trait HandlerRun: Send + Sync + Debug {
 
     fn handler_type(&self) -> &HandlerType;
     fn state(&self) -> &dyn Any;
-    fn on_app_listen(&self, _: &Arc<crate::app::App>);
+
+    fn on_app_listen_mut(&self, _: &mut crate::app::App);
+    fn on_app_listen_arc(&self, _: &Arc<crate::app::App>);
+
     fn type_id(&self) -> std::any::TypeId
     where
         Self: 'static;
@@ -152,8 +157,12 @@ where
         &self.state
     }
 
-    fn on_app_listen(&self, app: &Arc<crate::app::App>) {
-        self.f.on_app_listen(app);
+    fn on_app_listen_mut(&self, a: &mut crate::app::App) {
+        self.f.on_app_listen_mut(a);
+    }
+
+    fn on_app_listen_arc(&self, a: &Arc<crate::app::App>) {
+        self.f.on_app_listen_arc(a);
     }
 
     fn type_id(&self) -> std::any::TypeId

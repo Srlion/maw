@@ -13,7 +13,10 @@ macro_rules! impl_async_fn {
 
                 fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send;
 
-                fn on_app_listen(&self, _: &Arc<App>) {}
+                #[allow(unused_variables)]
+                fn on_app_listen_mut(&self, app: &mut App) {}
+                #[allow(unused_variables)]
+                fn on_app_listen_arc(&self, app: &Arc<App>) {}
             }
 
             #[allow(non_snake_case)]

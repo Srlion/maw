@@ -105,9 +105,11 @@ impl Ctx {
 impl AsyncFn1<&mut Ctx> for CsrfMiddleware {
     type Output = ();
 
-    async fn call(&self, c: &mut Ctx) -> Self::Output {
-        c.res.locals.insert("csrf_header", CSRF_HEADER);
+    fn on_app_listen_mut(&self, app: &mut crate::prelude::App) {
+        app.render_env.add_global("csrf_header", CSRF_HEADER);
+    }
 
+    async fn call(&self, c: &mut Ctx) -> Self::Output {
         let is_safe = self.safe_methods.contains(c.req.method());
 
         let token = match self.storage {

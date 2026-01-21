@@ -114,9 +114,7 @@ impl AsyncFn1<&mut Ctx> for CsrfMiddleware {
             CsrfStorage::Cookie => c
                 .cookies
                 .get_typed::<String>(&self.key_name, &self.cookie_type)
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
+                .unwrap_or_else(|_| {
                     let token = generate_token();
                     c.cookies.set_typed(
                         &self.key_name,

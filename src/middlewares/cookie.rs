@@ -25,37 +25,34 @@ impl CookieStore {
         self.jar.remove(name);
     }
 
-    pub fn get<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, Error> {
-        self.jar
-            .get(name)
-            .map(|c| serde_json::from_str(c.value()))
-            .transpose()
-            .map_err(Error::from)
+    pub fn get<T: DeserializeOwned>(&self, name: &str) -> Result<T, Error> {
+        let cookie = self.jar.get(name).ok_or(Error::NotFound)?;
+        serde_json::from_str(cookie.value()).map_err(Error::from)
     }
 
-    pub fn get_signed<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, Error> {
-        self.jar
+    pub fn get_signed<T: DeserializeOwned>(&self, name: &str) -> Result<T, Error> {
+        let cookie = self
+            .jar
             .signed(self.key())
             .get(name)
-            .map(|c| serde_json::from_str(c.value()))
-            .transpose()
-            .map_err(Error::from)
+            .ok_or(Error::NotFound)?;
+        serde_json::from_str(cookie.value()).map_err(Error::from)
     }
 
-    pub fn get_encrypted<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, Error> {
-        self.jar
+    pub fn get_encrypted<T: DeserializeOwned>(&self, name: &str) -> Result<T, Error> {
+        let cookie = self
+            .jar
             .private(self.key())
             .get(name)
-            .map(|c| serde_json::from_str(c.value()))
-            .transpose()
-            .map_err(Error::from)
+            .ok_or(Error::NotFound)?;
+        serde_json::from_str(cookie.value()).map_err(Error::from)
     }
 
     pub fn get_typed<T: DeserializeOwned>(
         &self,
         name: &str,
         cookie_type: &CookieType,
-    ) -> Result<Option<T>, Error> {
+    ) -> Result<T, Error> {
         match cookie_type {
             CookieType::Plain => self.get(name),
             CookieType::Signed => self.get_signed(name),

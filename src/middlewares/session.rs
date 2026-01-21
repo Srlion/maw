@@ -136,8 +136,6 @@ impl AsyncFn1<&mut Ctx> for SessionMiddleware {
             let session = c
                 .cookies
                 .get_typed::<SessionStore>(&self.cookie_name, &self.cookie_type)
-                .ok()
-                .flatten()
                 .unwrap_or_default();
 
             c.session = session;

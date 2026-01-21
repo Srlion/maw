@@ -75,4 +75,5 @@ pub mod prelude {
 pub use crate::into_response::IntoResponse;
 pub use crate::response::{BoxError, HttpBody};
 pub use app::config::Config;
+pub use async_fn::AsyncFn1 as Handler;
 pub use tokio_util::sync::CancellationToken;

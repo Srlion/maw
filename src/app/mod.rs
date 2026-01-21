@@ -214,8 +214,8 @@ async fn handle_request(
 ) -> Result<HttpResponse, Infallible> {
     let mut response = HttpResponse::new(HttpBody::default());
 
-    let path = normalize_path(request.uri().path());
-    let matched_route = match app.built_router.at(&path) {
+    let path = request.uri().path();
+    let matched_route = match app.built_router.at(path) {
         Ok(matched_route) => matched_route,
         Err(_) => {
             tracing::debug!("requested path not found: {path}");
@@ -261,23 +261,4 @@ async fn handle_request(
     }
 
     Ok(c.res.inner)
-}
-
-fn normalize_path(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-
-    for ch in s.chars() {
-        if ch == '\\' {
-            result.push('/');
-        } else {
-            result.extend(ch.to_lowercase());
-        }
-    }
-
-    // Remove trailing slash unless it's just "/"
-    if result.len() > 1 && result.ends_with('/') {
-        result.pop();
-    }
-
-    result
 }

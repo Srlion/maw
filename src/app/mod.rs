@@ -1,10 +1,11 @@
-use std::convert::Infallible;
-use std::net;
-use std::sync::{Arc, RwLock};
+use std::{
+    convert::Infallible,
+    net,
+    sync::{Arc, RwLock},
+};
 
 use http::StatusCode;
-use hyper::server::conn::http1;
-use hyper::{Request as HyperRequest, body::Incoming as IncomingBody};
+use hyper::{Request as HyperRequest, body::Incoming as IncomingBody, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use smol_str::SmolStr;
 use tokio::net::TcpListener;
@@ -12,12 +13,12 @@ use tokio_util::sync::CancellationToken;
 
 pub(crate) mod config;
 
-use crate::ALL;
-use crate::any_value_map::{AnyMap, SerializableAny};
-use crate::request::Request;
-use crate::response::{HttpBody, Response};
 use crate::{
+    ALL,
+    any_value_map::{AnyMap, SerializableAny},
     error::Error,
+    request::Request,
+    response::{HttpBody, Response},
     router::{self, MatchRouter},
 };
 

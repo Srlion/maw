@@ -1,7 +1,9 @@
 // https://github.com/salvo-rs/salvo/blob/main/crates/core/src/http/errors/status_error.rs
 
-use std::error::Error as StdError;
-use std::fmt::{self, Debug, Display, Formatter, Write};
+use std::{
+    error::Error as StdError,
+    fmt::{self, Debug, Display, Formatter, Write},
+};
 
 use http::StatusCode;
 

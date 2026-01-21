@@ -1,5 +1,4 @@
-use std::error::Error as StdError;
-use std::{convert::Infallible, io};
+use std::{convert::Infallible, error::Error as StdError, io};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

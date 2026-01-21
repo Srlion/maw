@@ -5,9 +5,10 @@ use http::{HeaderMap, HeaderValue, Method, Uri, Version, header::AsHeaderName};
 use http_body_util::BodyExt;
 use hyper::body::Incoming as IncomingBody;
 use mime_guess::{Mime, mime};
-use serde::Deserialize;
-use serde::de::DeserializeOwned;
-use serde::de::value::BorrowedStrDeserializer;
+use serde::{
+    Deserialize,
+    de::{DeserializeOwned, value::BorrowedStrDeserializer},
+};
 use smol_str::SmolStr;
 
 use crate::{

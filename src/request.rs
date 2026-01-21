@@ -71,7 +71,7 @@ impl Request {
     where
         T: Deserialize<'a>,
     {
-        let value = self.params.get(key).ok_or(Error::ParseNotFound)?;
+        let value = self.params.get(key).ok_or(Error::NotFound)?;
         T::deserialize(BorrowedStrDeserializer::new(value.as_str())).map_err(Error::Parse)
     }
 

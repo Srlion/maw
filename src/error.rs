@@ -2,9 +2,6 @@ use std::{convert::Infallible, error::Error as StdError, io};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("data does not exist")]
-    ParseNotFound,
-
     #[error("not found")]
     NotFound,
 

@@ -67,44 +67,30 @@ where
 
 pub(crate) struct HandlerWrapper<F, S = ()> {
     pub(crate) f: F,
-    pub(crate) state: S,
     pub(crate) handler_type: HandlerType,
     #[cfg(debug_assertions)]
     pub(crate) location: String,
+    pub(crate) state: S,
 }
 
 impl<F, S> HandlerWrapper<F, S> {
     pub(crate) fn new(f: F, state: S, handler_type: HandlerType, _skip: usize) -> Self {
-        #[cfg(debug_assertions)]
-        {
-            Self {
-                f,
-                state,
-                handler_type,
-                location: caller_location(_skip),
-            }
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            Self {
-                f,
-                state,
-                handler_type,
-            }
+        Self {
+            f,
+            handler_type,
+            #[cfg(debug_assertions)]
+            location: caller_location(_skip),
+            state,
         }
     }
 }
 
 impl<F, S> Debug for HandlerWrapper<F, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.handler_type)?;
         #[cfg(debug_assertions)]
-        {
-            write!(f, "{}: {}", self.handler_type, self.location)
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            write!(f, "HandlerWrapper")
-        }
+        write!(f, ": {}", self.location)?;
+        Ok(())
     }
 }
 

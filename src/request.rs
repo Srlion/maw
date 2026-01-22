@@ -282,26 +282,4 @@ impl Request {
         let query_string = self.parts.uri.query().unwrap_or("");
         serde_urlencoded::from_str(query_string).map_err(Error::from)
     }
-
-    // #[inline]
-    // pub async fn body(&mut self) -> Result<Bytes, Infallible> {
-    // 	self.body_with_size(64 * 1024).await
-    // }
-
-    // #[inline]
-    // pub async fn body_with_size(&mut self, limit: usize) -> Result<Bytes, Infallible> {
-    // 	match std::mem::replace(&mut self.body, None) {
-    // 		Some(body) => match LimitBody::new(body, limit).collect().await {
-    // 			Ok(collected) => Ok(collected.to_bytes()),
-    // 			Err(_) => {
-    // 				// bail!("failed to collect body");
-    // 				Ok(Bytes::new())
-    // 			}
-    // 		},
-    // 		None => {
-    // 			// bail!("body already consumed");
-    // 			Ok(Bytes::new())
-    // 		}
-    // 	}
-    // }
 }

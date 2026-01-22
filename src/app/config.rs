@@ -23,7 +23,7 @@ impl Config {
     /// Set the maximum body size that the server accepts
     ///
     /// Default: 4MB
-    pub fn body_limit(mut self, limit: usize) -> Self {
+    pub fn set_body_limit(mut self, limit: usize) -> Self {
         self.body_limit = limit;
         self
     }

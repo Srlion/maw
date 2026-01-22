@@ -14,7 +14,7 @@ impl AsyncFn1<&mut Ctx> for BodyLimitMiddleware {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {
-        c.req.body_limit(self.max);
+        c.req.set_body_limit(self.max);
         c.next().await;
     }
 }

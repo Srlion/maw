@@ -130,7 +130,7 @@ impl Request {
     /// Set the maximum body size that the request will read.
     ///
     /// Default: 4MB
-    pub fn body_limit(&mut self, limit: usize) {
+    pub fn set_body_limit(&mut self, limit: usize) {
         self.body_limit = limit;
     }
 

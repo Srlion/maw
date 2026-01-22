@@ -271,7 +271,7 @@ impl Response {
     #[inline]
     pub fn get_render_ctx(&self) -> minijinja::Value {
         let mut ctx = minijinja::__context::make();
-        self.app.with_locals(|l| {
+        self.app.locals(|l| {
             for (key, value) in l {
                 ctx.insert(key.into(), minijinja::Value::from_serialize(value));
             }

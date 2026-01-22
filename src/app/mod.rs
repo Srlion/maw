@@ -108,7 +108,7 @@ impl App {
     }
 
     /// Provides access to the application locals.
-    pub fn with_locals<F>(&self, f: F) -> &Self
+    pub fn locals<F>(&self, f: F) -> &Self
     where
         F: FnOnce(&AnyMap<dyn SerializableAny>),
     {
@@ -118,7 +118,7 @@ impl App {
     }
 
     /// Provides mutable access to the application locals.
-    pub fn with_locals_mut<F>(&self, f: F) -> &Self
+    pub fn locals_mut<F>(&self, f: F) -> &Self
     where
         F: FnOnce(&mut AnyMap<dyn SerializableAny>),
     {

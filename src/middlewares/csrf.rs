@@ -127,7 +127,7 @@ impl AsyncFn1<&mut Ctx> for CsrfMiddleware {
                     token
                 }),
             #[cfg(feature = "middleware-session")]
-            CsrfStorage::Session => c.session.get::<String>(&self.key_name).unwrap_or_else(|| {
+            CsrfStorage::Session => c.session.get::<String>(&self.key_name).unwrap_or_else(|_| {
                 let token = generate_token();
                 c.session.set(&self.key_name, token.clone());
                 token

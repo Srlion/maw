@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::{
     async_fn::AsyncFn1,
     ctx::Ctx,
+    error::Error,
     middlewares::cookie::{CookieOptions, CookieType},
 };
 
@@ -18,10 +19,9 @@ pub struct SessionStore {
 
 impl SessionStore {
     /// Get a value from the session
-    pub fn get<T: DeserializeOwned>(&self, key: impl AsRef<str>) -> Option<T> {
-        self.data
-            .get(key.as_ref())
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
+    pub fn get<T: DeserializeOwned>(&self, key: impl AsRef<str>) -> Result<T, Error> {
+        let value = self.data.get(key.as_ref()).ok_or(Error::NotFound)?;
+        serde_json::from_value(value.clone()).map_err(Error::from)
     }
 
     /// Set a value in the session

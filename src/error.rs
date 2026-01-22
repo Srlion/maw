@@ -52,6 +52,6 @@ pub enum Error {
 
 impl From<Infallible> for Error {
     fn from(_: Infallible) -> Self {
-        panic!("Infallible can never be constructed")
+        unreachable!("Infallible can never occur")
     }
 }

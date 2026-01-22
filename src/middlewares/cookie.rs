@@ -172,7 +172,7 @@ impl CookieMiddleware {
         Self { key: None }
     }
 
-    pub fn with_key(mut self, key: impl Into<CookieKey>) -> Self {
+    pub fn key(mut self, key: impl Into<CookieKey>) -> Self {
         self.key = Some(key.into().into_cookie_key());
         self
     }

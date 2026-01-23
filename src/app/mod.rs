@@ -248,8 +248,8 @@ async fn handle_request(
 ) -> Result<HttpResponse, Infallible> {
     let mut response = HttpResponse::new(HttpBody::default());
 
-    let path = request.uri().path();
-    let matched_route = match app.built_router.at(path) {
+    let path = normalize_path(request.uri().path());
+    let matched_route = match app.built_router.at(&path) {
         Ok(matched_route) => matched_route,
         Err(_) => {
             tracing::debug!("requested path not found: {path}");
@@ -295,4 +295,39 @@ async fn handle_request(
     }
 
     Ok(c.res.inner)
+}
+
+fn normalize_path(s: &str) -> std::borrow::Cow<'_, str> {
+    let mut result = None;
+
+    for (i, ch) in s.char_indices() {
+        if ch == '\\' {
+            let mut owned = result.take().unwrap_or_else(|| {
+                let mut buf = String::with_capacity(s.len());
+                buf.push_str(&s[..i]);
+                buf
+            });
+            owned.push('/');
+            result = Some(owned);
+        } else if let Some(ref mut owned) = result {
+            owned.push(ch);
+        }
+    }
+
+    match result {
+        None => {
+            if s.len() > 1 && s.ends_with('/') {
+                std::borrow::Cow::Borrowed(&s[..s.len() - 1])
+            } else {
+                std::borrow::Cow::Borrowed(s)
+            }
+        }
+
+        Some(mut owned) => {
+            if owned.len() > 1 && owned.ends_with('/') {
+                owned.pop();
+            }
+            std::borrow::Cow::Owned(owned)
+        }
+    }
 }

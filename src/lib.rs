@@ -16,6 +16,9 @@ mod response;
 mod router;
 mod status_error;
 
+#[cfg(feature = "static_files")]
+mod static_files;
+
 pub mod middlewares {
     #[cfg(feature = "middleware-cookie")]
     pub mod cookie;

@@ -12,6 +12,7 @@ default = []
 
 xml = ["dep:quick-xml"]
 minijinja = ["dep:minijinja", "dep:erased-serde"]
+static_files = ["dep:cap-std", "tokio/io-util", "tokio/fs", "tokio-util/io"]
 
 middleware-cookie = ["dep:cookie"]
 middleware-session = ["middleware-cookie", "serde/derive"]
@@ -29,7 +30,7 @@ middleware = [
     "middleware-body_limit",
 ]
 
-full = ["xml", "minijinja", "middleware"]
+full = ["xml", "minijinja", "static_files", "middleware"]
 
 [dependencies]
 matchit = "0.9.1"
@@ -70,3 +71,4 @@ rand = { version = "0.9.2", optional = true, default-features = false, features 
 ] }
 constant_time_eq = { version = "0.4.2", optional = true }
 pin-project-lite = { version = "0.2.16", optional = true }
+cap-std = { version = "4.0.0", optional = true }

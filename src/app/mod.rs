@@ -2,7 +2,6 @@
 use std::borrow::Cow;
 use std::{
     collections::HashSet,
-    convert::Infallible,
     net,
     sync::{Arc, RwLock},
 };
@@ -245,7 +244,7 @@ async fn handle_request(
     request: HyperRequest<IncomingBody>,
     app: Arc<App>,
     peer_addr: net::SocketAddr,
-) -> Result<HttpResponse, Infallible> {
+) -> Result<HttpResponse, NoResponse> {
     let mut response = HttpResponse::new(HttpBody::default());
 
     let path = normalize_path(request.uri().path());
@@ -290,6 +289,10 @@ async fn handle_request(
     let mut c = crate::ctx::Ctx::new(req, res, handlers);
     c.next().await;
 
+    if c.is_closed() {
+        return Err(NoResponse);
+    }
+
     if c.req.method() == http::Method::HEAD {
         *c.res.inner.body_mut() = HttpBody::default();
     }
@@ -331,3 +334,14 @@ fn normalize_path(s: &str) -> std::borrow::Cow<'_, str> {
         }
     }
 }
+
+#[derive(Debug)]
+struct NoResponse;
+
+impl std::fmt::Display for NoResponse {
+    fn fmt(&self, _: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Ok(())
+    }
+}
+
+impl std::error::Error for NoResponse {}

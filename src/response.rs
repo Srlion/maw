@@ -7,7 +7,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_core::Stream;
+use futures_util::{Stream, StreamExt};
 use http::{
     self, HeaderMap, HeaderName, HeaderValue, StatusCode,
     header::{self, InvalidHeaderName},
@@ -216,21 +216,25 @@ impl Response {
 
     /// Send a *streaming* body.
     #[inline]
-    pub fn stream<S>(&mut self, stream: S) -> &mut Self
+    pub fn stream<S, E>(&mut self, stream: S) -> &mut Self
     where
-        S: Stream<Item = Result<Bytes, BoxError>> + Send + Sync + 'static,
+        S: Stream<Item = Result<Bytes, E>> + Send + Sync + 'static,
+        E: Into<BoxError> + 'static,
     {
-        *self.inner.body_mut() = HttpBody::stream(stream);
+        let mapped = stream.map(|result| result.map_err(|e| e.into()));
+        *self.inner.body_mut() = HttpBody::stream(mapped);
         self
     }
 
     /// Send a *streaming* body with frames.
     #[inline]
-    pub fn stream_frames<S>(&mut self, stream: S) -> &mut Self
+    pub fn stream_frames<S, E>(&mut self, stream: S) -> &mut Self
     where
-        S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + Sync + 'static,
+        S: Stream<Item = Result<Frame<Bytes>, E>> + Send + Sync + 'static,
+        E: Into<BoxError> + 'static,
     {
-        *self.inner.body_mut() = HttpBody::stream_frames(stream);
+        let mapped = stream.map(|result| result.map_err(|e| e.into()));
+        *self.inner.body_mut() = HttpBody::stream_frames(mapped);
         self
     }
 

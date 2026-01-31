@@ -118,8 +118,12 @@ impl App {
     }
 
     #[cfg(feature = "minijinja")]
-    pub fn render_env(&self) -> &Jinja {
-        &self.jinja
+    pub fn jinja_mut<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(&mut Jinja),
+    {
+        f(&mut self.jinja);
+        self
     }
 
     /// set views path (creates RenderEnv if needed)

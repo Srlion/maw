@@ -183,6 +183,7 @@ impl CookieMiddleware {
         Self { key: None }
     }
 
+    #[track_caller]
     pub fn key(mut self, key: impl Into<CookieKey>) -> Self {
         self.key = Some(key.into().into_cookie_key());
         self
@@ -332,10 +333,11 @@ impl From<&str> for CookieKey {
 }
 
 impl CookieKey {
+    #[track_caller]
     fn into_cookie_key(self) -> cookie::Key {
         match self {
             Self::Key(k) => k,
-            Self::Bytes(b) => cookie::Key::from(&b),
+            Self::Bytes(b) => cookie::Key::try_from(b.as_ref()).expect("Invalid cookie key"),
         }
     }
 }

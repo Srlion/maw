@@ -76,4 +76,5 @@ pub mod prelude {
 pub use crate::into_response::IntoResponse;
 pub use crate::response::{BoxError, HttpBody};
 pub use app::config::Config;
+pub use serde_json;
 pub use tokio_util::sync::CancellationToken;

@@ -26,7 +26,8 @@ use crate::{
 
 type HttpResponse = http::Response<HttpBody>;
 
-pub struct App {
+pub struct App<S = ()> {
+    pub state: Arc<S>,
     pub(crate) router: router::Router,
     #[cfg(feature = "minijinja")]
     pub render_env: minijinja::Environment<'static>,
@@ -46,6 +47,7 @@ impl Default for App {
 impl App {
     pub fn new() -> Self {
         App {
+            state: Arc::new(()),
             router: router::Router::new(),
             #[cfg(feature = "minijinja")]
             render_env: minijinja::Environment::new(),
@@ -53,6 +55,19 @@ impl App {
             built_router: MatchRouter::default(),
             config: config::Config::default(),
             shutdown_timeout: std::time::Duration::from_secs(10),
+        }
+    }
+
+    pub fn with_state<S>(self, state: S) -> App<S> {
+        App {
+            state: Arc::new(state),
+            router: self.router,
+            #[cfg(feature = "minijinja")]
+            render_env: self.render_env,
+            locals: self.locals,
+            built_router: self.built_router,
+            config: self.config,
+            shutdown_timeout: self.shutdown_timeout,
         }
     }
 
@@ -229,6 +244,7 @@ impl App {
 impl Clone for App {
     fn clone(&self) -> Self {
         App {
+            state: self.state.clone(),
             router: self.router.clone(),
             #[cfg(feature = "minijinja")]
             render_env: self.render_env.clone(),

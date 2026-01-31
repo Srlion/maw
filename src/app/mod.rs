@@ -120,9 +120,9 @@ impl App {
     #[cfg(feature = "minijinja")]
     pub fn jinja_mut<F>(mut self, f: F) -> Self
     where
-        F: FnOnce(&mut Jinja),
+        F: FnOnce(Jinja) -> Jinja,
     {
-        f(&mut self.jinja);
+        self.jinja.modify(f);
         self
     }
 

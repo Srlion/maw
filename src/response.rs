@@ -285,13 +285,8 @@ impl Response {
         template: &str,
         c: minijinja::Value,
     ) -> Result<String, minijinja::Error> {
-        let template = self.app.render_env.get_template(template).map_err(|e| {
-            tracing::warn!("template not found: {template}");
-            e
-        })?;
-
-        template.render(&c).map_err(|e| {
-            tracing::warn!("failed to render template {}: {e}", template.name());
+        self.app.jinja.render(template, &c).map_err(|e| {
+            tracing::warn!("failed to render template {template}: {e}");
             e
         })
     }

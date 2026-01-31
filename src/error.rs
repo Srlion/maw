@@ -5,9 +5,6 @@ pub enum Error {
     #[error("io: {0}")]
     Io(#[from] io::Error),
 
-    #[error("http: {0}")]
-    Http(#[from] http::Error),
-
     #[error("matchit: {0}")]
     MatchitInsert(#[from] matchit::InsertError),
 

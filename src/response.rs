@@ -397,36 +397,36 @@ where
 }
 
 pub trait AppendIntoHeaderValues {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error>;
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error>;
 }
 
 impl AppendIntoHeaderValues for &str {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
-        let value = HeaderValue::try_from(self).map_err(|e| Error::from(http::Error::from(e)))?;
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
+        let value = HeaderValue::try_from(self).map_err(|e| http::Error::from(e))?;
         map.append(key, value);
         Ok(())
     }
 }
 
 impl AppendIntoHeaderValues for String {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
-        let value = HeaderValue::try_from(self).map_err(|e| Error::from(http::Error::from(e)))?;
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
+        let value = HeaderValue::try_from(self).map_err(|e| http::Error::from(e))?;
         map.append(key, value);
         Ok(())
     }
 }
 
 impl AppendIntoHeaderValues for HeaderValue {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         map.append(key, self);
         Ok(())
     }
 }
 
 impl AppendIntoHeaderValues for &[&str] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for &value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -434,10 +434,9 @@ impl AppendIntoHeaderValues for &[&str] {
 }
 
 impl AppendIntoHeaderValues for &[String] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value.as_str())
-                .map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value.as_str()).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -445,9 +444,9 @@ impl AppendIntoHeaderValues for &[String] {
 }
 
 impl AppendIntoHeaderValues for Vec<String> {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -455,9 +454,9 @@ impl AppendIntoHeaderValues for Vec<String> {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for [String; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -465,9 +464,9 @@ impl<const N: usize> AppendIntoHeaderValues for [String; N] {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for [&str; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -475,9 +474,9 @@ impl<const N: usize> AppendIntoHeaderValues for [&str; N] {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for &[String; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -485,9 +484,9 @@ impl<const N: usize> AppendIntoHeaderValues for &[String; N] {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for &[&str; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(*value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(*value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -495,9 +494,9 @@ impl<const N: usize> AppendIntoHeaderValues for &[&str; N] {
 }
 
 impl AppendIntoHeaderValues for Vec<&str> {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())

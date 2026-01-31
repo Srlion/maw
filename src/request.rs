@@ -14,7 +14,7 @@ use smol_str::SmolStr;
 use crate::{
     any_value_map::{AnyMap, CloneableAny},
     app::App,
-    error::Error,
+    prelude::StatusError,
 };
 
 pub struct Request {
@@ -59,12 +59,21 @@ impl Request {
     }
 
     #[inline]
-    pub fn param<'a, T>(&'a self, key: &str) -> Result<T, Error>
+    pub fn param<'a, T>(&'a self, key: &str) -> Result<T, ParamError>
     where
         T: Deserialize<'a>,
     {
-        let value = self.params.get(key).ok_or(Error::NotFound)?;
-        T::deserialize(BorrowedStrDeserializer::new(value.as_str())).map_err(Error::Parse)
+        let value = self
+            .params
+            .get(key)
+            .ok_or(ParamError::Missing(key.into()))?;
+        T::deserialize(BorrowedStrDeserializer::new(value.as_str())).map_err(move |e| {
+            ParamError::Invalid {
+                key: key.into(),
+                value: value.clone(),
+                source: e,
+            }
+        })
     }
 
     /// Get param as &str.
@@ -132,13 +141,13 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn body_raw(&mut self, limit: Option<usize>) -> Result<&Bytes, Error> {
+    pub async fn body_raw(&mut self, limit: Option<usize>) -> Result<&Bytes, BodyError> {
         if let Some(ref bytes) = self.body_bytes {
             return Ok(bytes);
         }
         let limit = limit.unwrap_or_else(|| self.body_limit);
         let limited = http_body_util::Limited::new(&mut self.body, limit);
-        let collected = limited.collect().await.map_err(Error::BodyCollect)?;
+        let collected = limited.collect().await.map_err(BodyError::Collect)?;
         let bytes = collected.to_bytes();
         self.body_bytes = Some(bytes);
         Ok(self.body_bytes.as_ref().unwrap())
@@ -150,7 +159,7 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn body_text(&mut self, limit: Option<usize>) -> Result<&str, Error> {
+    pub async fn body_text(&mut self, limit: Option<usize>) -> Result<&str, BodyError> {
         let bytes = self.body_raw(limit).await?;
         let s = std::str::from_utf8(bytes)?;
         Ok(s)
@@ -160,20 +169,18 @@ impl Request {
     pub async fn parse_json<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
-    ) -> Result<T, Error> {
+    ) -> Result<T, ParseError> {
         let bytes = self.body_raw(limit).await?;
-        let value: T = serde_json::from_slice(bytes)?;
-        Ok(value)
+        Ok(serde_json::from_slice(bytes)?)
     }
 
     #[inline]
     pub async fn parse_form<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
-    ) -> Result<T, Error> {
+    ) -> Result<T, ParseError> {
         let bytes = self.body_raw(limit).await?;
-        let value: T = serde_urlencoded::from_bytes(bytes)?;
-        Ok(value)
+        Ok(serde_urlencoded::from_bytes(bytes)?)
     }
 
     #[cfg(feature = "xml")]
@@ -181,11 +188,10 @@ impl Request {
     pub async fn parse_xml<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
-    ) -> Result<T, Error> {
+    ) -> Result<T, ParseError> {
         let bytes = self.body_raw(limit).await?;
         let str = std::str::from_utf8(bytes)?;
-        let value: T = quick_xml::de::from_str(str)?;
-        Ok(value)
+        Ok(quick_xml::de::from_str(str)?)
     }
 
     /// Parse body based on content type.
@@ -202,7 +208,7 @@ impl Request {
     pub async fn parse_body<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
-    ) -> Result<T, Error> {
+    ) -> Result<T, ParseError> {
         match self.content_type() {
             Some(mime) => {
                 if mime.suffix() == Some(mime::JSON) || mime.subtype() == mime::JSON {
@@ -212,7 +218,7 @@ impl Request {
                         "x-www-form-urlencoded" => self.parse_form(limit).await,
                         #[cfg(feature = "xml")]
                         "xml" => self.parse_xml(limit).await,
-                        _ => Err(Error::UnsupportedMediaType),
+                        _ => Err(BodyError::UnsupportedMediaType.into()),
                     }
                 } else if mime.type_() == mime::TEXT && mime.subtype() == mime::XML {
                     #[cfg(feature = "xml")]
@@ -221,13 +227,13 @@ impl Request {
                     }
                     #[cfg(not(feature = "xml"))]
                     {
-                        Err(Error::UnsupportedMediaType)
+                        Err(BodyError::UnsupportedMediaType.into())
                     }
                 } else {
-                    Err(Error::UnsupportedMediaType)
+                    Err(BodyError::UnsupportedMediaType.into())
                 }
             }
-            None => Err(Error::MissingContentType),
+            None => Err(BodyError::MissingContentType.into()),
         }
     }
 
@@ -270,8 +276,131 @@ impl Request {
     }
 
     #[inline]
-    pub fn query_parse<T: DeserializeOwned>(&self) -> Result<T, Error> {
+    pub fn query_parse<T: DeserializeOwned>(&self) -> Result<T, QueryError> {
         let query_string = self.parts.uri.query().unwrap_or("");
-        serde_urlencoded::from_str(query_string).map_err(Error::from)
+        Ok(serde_urlencoded::from_str(query_string)?)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ParamError {
+    #[error("Missing path parameter: {0}")]
+    Missing(SmolStr),
+
+    #[error("Invalid value for path parameter: {key}")]
+    Invalid {
+        key: SmolStr,
+        value: SmolStr,
+        #[source]
+        source: serde::de::value::Error,
+    },
+}
+
+impl From<ParamError> for StatusError {
+    fn from(e: ParamError) -> Self {
+        match e {
+            ParamError::Missing(e) => {
+                StatusError::bad_request().brief(format!("Missing path parameter: {e}"))
+            }
+            ParamError::Invalid { key, .. } => StatusError::unprocessable_entity()
+                .brief(format!("Invalid value for path parameter: {key}")),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BodyError {
+    #[error("Failed to collect body")]
+    Collect(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("Body is not valid UTF-8")]
+    InvalidUtf8(#[from] std::str::Utf8Error),
+
+    #[error("Missing Content-Type header")]
+    MissingContentType,
+
+    #[error("Unsupported media type")]
+    UnsupportedMediaType,
+}
+
+impl From<BodyError> for StatusError {
+    fn from(e: BodyError) -> Self {
+        match e {
+            BodyError::Collect(_) => StatusError::bad_request().brief("Failed to read body"),
+            BodyError::InvalidUtf8(_) => {
+                StatusError::bad_request().brief("Body is not valid UTF-8")
+            }
+            BodyError::MissingContentType => {
+                StatusError::bad_request().brief("Missing Content-Type header")
+            }
+            BodyError::UnsupportedMediaType => {
+                StatusError::unsupported_media_type().brief("Unsupported media type")
+            }
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+    #[error("Failed to parse JSON")]
+    Json(#[from] serde_json::Error),
+
+    #[error("Failed to parse form data")]
+    Form(#[from] serde_urlencoded::de::Error),
+
+    #[cfg(feature = "xml")]
+    #[error("Failed to parse XML")]
+    Xml(#[from] quick_xml::DeError),
+
+    #[error("Body is not valid UTF-8")]
+    InvalidUtf8(#[from] std::str::Utf8Error),
+
+    #[error(transparent)]
+    Body(#[from] BodyError),
+}
+
+impl From<ParseError> for StatusError {
+    fn from(e: ParseError) -> Self {
+        match e {
+            ParseError::Json(ref err) => {
+                if err.is_syntax() || err.is_eof() {
+                    StatusError::bad_request().brief("Invalid JSON syntax")
+                } else {
+                    StatusError::unprocessable_entity()
+                        .brief("Failed to deserialize JSON into expected type")
+                }
+            }
+            ParseError::Form(_) => StatusError::bad_request().brief("Invalid form data"),
+            #[cfg(feature = "xml")]
+            ParseError::Xml(ref err) => {
+                use quick_xml::de::DeError;
+                match err {
+                    DeError::InvalidXml(_)
+                    | DeError::UnexpectedEof
+                    | DeError::UnexpectedStart(_) => {
+                        StatusError::bad_request().brief("Invalid XML syntax")
+                    }
+                    DeError::Custom(_) => StatusError::unprocessable_entity()
+                        .brief("Failed to deserialize XML into expected type"),
+                    _ => StatusError::bad_request().brief("Failed to parse XML"),
+                }
+            }
+            ParseError::InvalidUtf8(_) => {
+                StatusError::bad_request().brief("Body is not valid UTF-8")
+            }
+            ParseError::Body(b) => b.into(),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum QueryError {
+    #[error("Failed to parse query string")]
+    Parse(#[from] serde_urlencoded::de::Error),
+}
+
+impl From<QueryError> for StatusError {
+    fn from(_: QueryError) -> Self {
+        StatusError::bad_request().brief("Invalid query string")
     }
 }

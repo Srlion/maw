@@ -106,14 +106,12 @@ impl App {
     }
 
     /// Provides mutable access to the application locals.
-    pub fn locals_mut<F>(self, f: F) -> Self
+    pub fn locals_mut<F>(&self, f: F) -> &Self
     where
         F: FnOnce(&mut AnyMap<dyn SerializableAny>),
     {
-        {
-            let mut locals = self.locals.write().unwrap();
-            f(&mut locals);
-        }
+        let mut locals = self.locals.write().unwrap();
+        f(&mut locals);
         self
     }
 

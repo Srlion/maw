@@ -4,6 +4,11 @@ use std::sync::{Arc, Mutex};
 
 use minijinja::Environment;
 
+// I tried using minijinja's built-in `AutoReload`, but it makes it painful to work with
+// so I implemented my own simple version here. When in debug mode, the templates are cleared
+// from the environment before each render, forcing them to be reloaded from disk.
+// this is obviously slower, but it's very convenient for development.
+
 #[derive(Clone)]
 pub struct Jinja(
     #[cfg(debug_assertions)] Arc<Mutex<Environment<'static>>>,

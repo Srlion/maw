@@ -107,7 +107,7 @@ impl AsyncFn1<&mut Ctx> for CsrfMiddleware {
 
     fn on_app_listen_mut(&self, app: &mut crate::prelude::App) {
         app.jinja
-            .modify(|env| env.add_global("csrf_header", CSRF_HEADER));
+            .with(|env| env.add_global("csrf_header", CSRF_HEADER));
     }
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {

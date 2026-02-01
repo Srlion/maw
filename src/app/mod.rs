@@ -52,7 +52,7 @@ impl App {
             state: Arc::new(()),
             router: router::Router::new(),
             #[cfg(feature = "minijinja")]
-            jinja: Jinja::new(),
+            jinja: Jinja::default(),
             locals: RwLock::new(AnyMap::new()),
             built_router: MatchRouter::default(),
             config: config::Config::default(),
@@ -115,19 +115,27 @@ impl App {
         self
     }
 
-    #[cfg(feature = "minijinja")]
-    pub fn jinja_mut<F>(mut self, f: F) -> Self
-    where
-        F: FnOnce(Jinja) -> Jinja,
-    {
-        self.jinja.modify(f);
+    /// Sets application locals.
+    pub fn with_locals(self, f: impl FnOnce(&mut AnyMap<dyn SerializableAny>)) -> Self {
+        self.locals_mut(f);
         self
     }
 
-    /// set views path (creates RenderEnv if needed)
+    /// set views path
     #[cfg(feature = "minijinja")]
     pub fn views(mut self, path: impl AsRef<std::path::Path>) -> Self {
-        self.jinja = Jinja::with_path(path);
+        self.jinja = Jinja::new(path);
+        self
+    }
+
+    #[cfg(feature = "minijinja")]
+    pub fn views_with(
+        mut self,
+        path: impl AsRef<std::path::Path>,
+        f: impl FnOnce(&mut minijinja::Environment<'static>),
+    ) -> Self {
+        self.jinja = Jinja::new(path);
+        self.jinja.with(f);
         self
     }
 }

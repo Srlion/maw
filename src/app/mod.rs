@@ -1,5 +1,3 @@
-#[cfg(feature = "minijinja")]
-use std::borrow::Cow;
 use std::{
     collections::HashSet,
     net,
@@ -15,6 +13,11 @@ use tokio_util::sync::CancellationToken;
 
 pub(crate) mod config;
 
+#[cfg(feature = "minijinja")]
+mod jinja;
+#[cfg(feature = "minijinja")]
+pub use jinja::Jinja;
+
 use crate::{
     ALL,
     any_value_map::{AnyMap, SerializableAny},
@@ -26,14 +29,14 @@ use crate::{
 
 type HttpResponse = http::Response<HttpBody>;
 
-pub struct App {
+pub struct App<S = ()> {
+    pub state: Arc<S>,
     pub(crate) router: router::Router,
     #[cfg(feature = "minijinja")]
-    pub render_env: minijinja::Environment<'static>,
+    pub jinja: Jinja,
     pub(crate) locals: RwLock<AnyMap<dyn SerializableAny>>,
     pub(crate) built_router: MatchRouter,
     pub(crate) config: config::Config,
-    /// Shutdown timeout in seconds
     pub(crate) shutdown_timeout: std::time::Duration,
 }
 
@@ -46,13 +49,27 @@ impl Default for App {
 impl App {
     pub fn new() -> Self {
         App {
+            state: Arc::new(()),
             router: router::Router::new(),
             #[cfg(feature = "minijinja")]
-            render_env: minijinja::Environment::new(),
+            jinja: Jinja::default(),
             locals: RwLock::new(AnyMap::new()),
             built_router: MatchRouter::default(),
             config: config::Config::default(),
             shutdown_timeout: std::time::Duration::from_secs(10),
+        }
+    }
+
+    pub fn with_state<S>(self, state: S) -> App<S> {
+        App {
+            state: Arc::new(state),
+            router: self.router,
+            #[cfg(feature = "minijinja")]
+            jinja: self.jinja,
+            locals: self.locals,
+            built_router: self.built_router,
+            config: self.config,
+            shutdown_timeout: self.shutdown_timeout,
         }
     }
 
@@ -66,34 +83,6 @@ impl App {
     /// Changes to the router after the server has started will not take effect.
     pub fn router(mut self, router: router::Router) -> Self {
         self.router = router;
-        self
-    }
-
-    #[cfg(feature = "minijinja")]
-    pub fn views(mut self, path: impl AsRef<std::path::Path>) -> Self {
-        self.render_env.set_loader(minijinja::path_loader(path));
-        self
-    }
-
-    #[cfg(feature = "minijinja")]
-    pub fn render_env_add_global(
-        mut self,
-        name: impl Into<Cow<'static, str>>,
-        value: impl Into<minijinja::value::Value>,
-    ) -> Self {
-        self.render_env.add_global(name.into(), value.into());
-        self
-    }
-
-    #[cfg(feature = "minijinja")]
-    pub fn render_env_add_filter<N, F, Rv, Args>(mut self, name: N, f: F) -> Self
-    where
-        N: Into<std::borrow::Cow<'static, str>>,
-        F: minijinja::functions::Function<Rv, Args>,
-        Rv: minijinja::value::FunctionResult,
-        Args: for<'a> minijinja::value::FunctionArgs<'a>,
-    {
-        self.render_env.add_filter(name.into(), f);
         self
     }
 
@@ -123,6 +112,30 @@ impl App {
     {
         let mut locals = self.locals.write().unwrap();
         f(&mut locals);
+        self
+    }
+
+    /// Sets application locals.
+    pub fn with_locals(self, f: impl FnOnce(&mut AnyMap<dyn SerializableAny>)) -> Self {
+        self.locals_mut(f);
+        self
+    }
+
+    /// set views path
+    #[cfg(feature = "minijinja")]
+    pub fn views(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        self.jinja = Jinja::new(path);
+        self
+    }
+
+    #[cfg(feature = "minijinja")]
+    pub fn views_with(
+        mut self,
+        path: impl AsRef<std::path::Path>,
+        f: impl FnOnce(&mut minijinja::Environment<'static>),
+    ) -> Self {
+        self.jinja = Jinja::new(path);
+        self.jinja.with(f);
         self
     }
 }
@@ -229,9 +242,10 @@ impl App {
 impl Clone for App {
     fn clone(&self) -> Self {
         App {
+            state: self.state.clone(),
             router: self.router.clone(),
             #[cfg(feature = "minijinja")]
-            render_env: self.render_env.clone(),
+            jinja: self.jinja.clone(),
             locals: RwLock::new(self.locals.read().unwrap().clone()),
             built_router: MatchRouter::default(),
             config: self.config.clone(),

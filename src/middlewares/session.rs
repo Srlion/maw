@@ -1,32 +1,35 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json::Value;
+use smol_str::SmolStr;
 
 use crate::{
     async_fn::AsyncFn1,
     ctx::Ctx,
-    error::Error,
     middlewares::cookie::{CookieOptions, CookieType},
+    prelude::StatusError,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SessionStore {
-    data: HashMap<String, Value>,
+    data: HashMap<String, Vec<u8>>,
     #[serde(skip)]
     modified: bool,
 }
 
 impl SessionStore {
     /// Get a value from the session
-    pub fn get<T: DeserializeOwned>(&self, key: impl AsRef<str>) -> Result<T, Error> {
-        let value = self.data.get(key.as_ref()).ok_or(Error::NotFound)?;
-        serde_json::from_value(value.clone()).map_err(Error::from)
+    pub fn get<T: DeserializeOwned>(&self, key: impl AsRef<str>) -> Result<T, SessionError> {
+        let bytes = self
+            .data
+            .get(key.as_ref())
+            .ok_or_else(|| SessionError::NotFound(key.as_ref().into()))?;
+        postcard::from_bytes(bytes).map_err(SessionError::from)
     }
 
     /// Set a value in the session
     pub fn set<T: Serialize>(&mut self, key: impl Into<String>, value: T) {
-        let value = match serde_json::to_value(value) {
+        let value = match postcard::to_stdvec(&value) {
             Ok(v) => v,
             Err(e) => {
                 tracing::error!("failed to serialize session value: {}", e);
@@ -38,9 +41,11 @@ impl SessionStore {
     }
 
     /// Remove a value from the session
-    pub fn remove(&mut self, key: &str) -> Option<Value> {
+    ///
+    /// Returns true if the key was present
+    pub fn remove(&mut self, key: &str) -> bool {
         self.modified = true;
-        self.data.remove(key)
+        self.data.remove(key).is_some()
     }
 
     /// Clear all session data
@@ -154,6 +159,33 @@ impl AsyncFn1<&mut Ctx> for SessionMiddleware {
                 &self.cookie_type,
                 Some(cookie_options),
             );
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SessionError {
+    #[error("Session key not found: {0}")]
+    NotFound(SmolStr),
+
+    #[error("Failed to deserialize session value")]
+    Deserialize(#[from] postcard::Error),
+}
+
+impl From<SessionError> for StatusError {
+    fn from(e: SessionError) -> Self {
+        match e {
+            SessionError::NotFound(key) => {
+                StatusError::bad_request().brief(format!("Session key not found: {key}"))
+            }
+            SessionError::Deserialize(ref err) => {
+                use postcard::Error::*;
+                match err {
+                    SerdeDeCustom => StatusError::unprocessable_entity()
+                        .brief("Failed to deserialize session value into expected type"),
+                    _ => StatusError::bad_request().brief("Invalid session data"),
+                }
+            }
         }
     }
 }

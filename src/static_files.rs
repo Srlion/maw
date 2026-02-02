@@ -11,16 +11,14 @@ use crate::{async_fn::AsyncFn1, ctx::Ctx};
 
 pub struct StaticFiles<E> {
     _marker: PhantomData<E>,
-    prefix: &'static str,
-    index: &'static str,
+    pub(crate) index: &'static str,
     cache_control: Option<String>,
 }
 
 impl<E: RustEmbed> StaticFiles<E> {
-    pub fn new(prefix: &'static str) -> Self {
+    pub fn new(_: E) -> Self {
         Self {
             _marker: PhantomData,
-            prefix: prefix.trim_matches('/'),
             index: "index.html",
             cache_control: None,
         }
@@ -41,25 +39,33 @@ impl<E: RustEmbed> StaticFiles<E> {
     }
 }
 
+impl<E> Clone for StaticFiles<E> {
+    fn clone(&self) -> Self {
+        Self {
+            _marker: PhantomData,
+            index: self.index,
+            cache_control: self.cache_control.clone(),
+        }
+    }
+}
+
 impl<E: RustEmbed + Sync> AsyncFn1<&mut Ctx> for StaticFiles<E> {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {
-        let uri_path = c.req.uri().path().trim_start_matches('/');
+        let path = c.req.param_str("_");
 
-        let path = if self.prefix.is_empty() {
-            uri_path
-        } else if let Some(rest) = uri_path.strip_prefix(self.prefix) {
-            rest.trim_start_matches('/')
+        let (file, mime_path) = if path.is_empty() || path.ends_with('/') {
+            let full = [path, self.index].concat();
+            (E::get(&full), full)
         } else {
-            c.res.send_status(StatusCode::NOT_FOUND);
-            return;
-        };
-
-        let file = if path.is_empty() || path.ends_with('/') {
-            E::get(&[path, self.index].concat())
-        } else {
-            E::get(path).or_else(|| E::get(&[path, self.index].concat()))
+            match E::get(path) {
+                Some(f) => (Some(f), path.to_string()),
+                None => {
+                    let full = [path, "/", self.index].concat();
+                    (E::get(&full), full)
+                }
+            }
         };
 
         let Some(file) = file else {
@@ -83,7 +89,7 @@ impl<E: RustEmbed + Sync> AsyncFn1<&mut Ctx> for StaticFiles<E> {
             }
         }
 
-        let mime = mime_guess::from_path(path).first_or_octet_stream();
+        let mime = mime_guess::from_path(&mime_path).first_or_octet_stream();
         c.res.set(("Content-Type", mime.as_ref()));
 
         if let Some(cc) = &self.cache_control {

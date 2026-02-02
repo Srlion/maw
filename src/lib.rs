@@ -80,7 +80,7 @@ pub mod prelude {
     #[cfg(feature = "minijinja")]
     pub use minijinja;
     #[cfg(feature = "static_files")]
-    pub use rust_embed::RustEmbed;
+    pub use rust_embed;
 }
 
 pub use crate::into_response::IntoResponse;

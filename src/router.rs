@@ -185,6 +185,30 @@ impl Router {
     }
 
     method_handlers!(GET, POST, PUT, DELETE, HEAD, OPTIONS, CONNECT, PATCH, TRACE);
+
+    #[cfg(feature = "static_files")]
+    #[inline(never)]
+    pub fn static_files<E: rust_embed::RustEmbed + Send + Sync + 'static>(
+        &self,
+        prefix: &'static str,
+        files: crate::static_files::StaticFiles<E>,
+    ) -> Self {
+        let prefix = prefix.trim_matches('/');
+        let has_index = E::get(files.index).is_some();
+
+        let (root, catch_all) = if prefix.is_empty() {
+            ("/".to_string(), "/{*_}".to_string())
+        } else {
+            (["/", prefix].concat(), ["/", prefix, "/{*_}"].concat())
+        };
+
+        let r = if has_index {
+            files.clone().add_handlers(self, Method::GET, root, 5)
+        } else {
+            self.clone()
+        };
+        files.add_handlers(&r, Method::GET, catch_all, 5)
+    }
 }
 
 impl std::fmt::Debug for Router {

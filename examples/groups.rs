@@ -27,15 +27,18 @@ async fn main() -> Result<(), MawError> {
         })
         .push(admin.clone()); // Router is Arc<Mutex<RouterInner>>, so it's the same instance
 
+    let router = Router::new()
+        .middleware(LoggingMiddleware::new())
+        .push(api)
+        .push(admin)
+        .push(test);
+
+    // Print the router structure for debugging, very useful!
+    tracing::info!("Router: {router:#?}");
+
     let app = App::new()
         //
-        .router(
-            Router::new()
-                .middleware(LoggingMiddleware::new())
-                .push(api)
-                .push(admin)
-                .push(test),
-        );
+        .router(router);
 
     app.listen("127.0.0.1:3000").await
 }

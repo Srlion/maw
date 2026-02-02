@@ -12,6 +12,7 @@ default = []
 
 xml = ["dep:quick-xml"]
 minijinja = ["dep:minijinja", "dep:erased-serde"]
+static_files = ["dep:rust-embed", "dep:httpdate"]
 
 middleware-cookie = ["dep:cookie", "dep:postcard", "dep:base64"]
 middleware-session = ["middleware-cookie", "serde/derive"]
@@ -29,7 +30,7 @@ middleware = [
     "middleware-body_limit",
 ]
 
-full = ["xml", "minijinja", "middleware"]
+full = ["xml", "minijinja", "static_files", "middleware"]
 
 # for examples
 [dev-dependencies]
@@ -77,3 +78,8 @@ constant_time_eq = { version = "0.4.2", optional = true }
 pin-project-lite = { version = "0.2.16", optional = true }
 postcard = { version = "1.1.3", optional = true, features = ["use-std"] }
 base64 = { version = "0.21.3", optional = true }
+rust-embed = { version = "8.11.0", optional = true, features = [
+    "debug-embed",
+    "interpolate-folder-path",
+] }
+httpdate = { version = "1.0.3", optional = true }

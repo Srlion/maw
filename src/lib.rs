@@ -16,6 +16,11 @@ mod response;
 mod router;
 mod status_error;
 
+#[cfg(feature = "static_files")]
+mod static_files;
+
+pub use static_files::StaticFiles;
+
 pub mod middlewares {
     #[cfg(feature = "middleware-cookie")]
     pub mod cookie;
@@ -61,6 +66,7 @@ pub fn all() -> http::Method {
 pub static ALL: LazyLock<http::Method> = LazyLock::new(all);
 
 pub mod prelude {
+    pub use crate::StaticFiles;
     pub use crate::app::App;
     pub use crate::async_fn::AsyncFn1 as Handler;
     pub use crate::ctx::Ctx;

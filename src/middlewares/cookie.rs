@@ -1,7 +1,9 @@
+use base64::{Engine as _, engine::general_purpose};
 pub use cookie::{Cookie, CookieJar, Key, SameSite};
 use serde::{Serialize, de::DeserializeOwned};
+use smol_str::SmolStr;
 
-use crate::{async_fn::AsyncFn1, ctx::Ctx, error::Error};
+use crate::{async_fn::AsyncFn1, ctx::Ctx, prelude::StatusError};
 
 #[derive(Clone, Debug)]
 pub enum CookieType {
@@ -25,34 +27,40 @@ impl CookieStore {
         self.jar.remove(name);
     }
 
-    pub fn get<T: DeserializeOwned>(&self, name: &str) -> Result<T, Error> {
-        let cookie = self.jar.get(name).ok_or(Error::NotFound)?;
-        serde_json::from_str(cookie.value()).map_err(Error::from)
+    pub fn get<T: DeserializeOwned>(&self, name: &str) -> Result<T, CookieError> {
+        let cookie = self
+            .jar
+            .get(name)
+            .ok_or_else(|| CookieError::NotFound(name.into()))?;
+        let bytes = general_purpose::STANDARD.decode(cookie.value())?;
+        postcard::from_bytes(&bytes).map_err(CookieError::from)
     }
 
-    pub fn get_signed<T: DeserializeOwned>(&self, name: &str) -> Result<T, Error> {
+    pub fn get_signed<T: DeserializeOwned>(&self, name: &str) -> Result<T, CookieError> {
         let cookie = self
             .jar
             .signed(self.key())
             .get(name)
-            .ok_or(Error::NotFound)?;
-        serde_json::from_str(cookie.value()).map_err(Error::from)
+            .ok_or_else(|| CookieError::NotFound(name.into()))?;
+        let bytes = general_purpose::STANDARD.decode(cookie.value())?;
+        postcard::from_bytes(&bytes).map_err(CookieError::from)
     }
 
-    pub fn get_encrypted<T: DeserializeOwned>(&self, name: &str) -> Result<T, Error> {
+    pub fn get_encrypted<T: DeserializeOwned>(&self, name: &str) -> Result<T, CookieError> {
         let cookie = self
             .jar
             .private(self.key())
             .get(name)
-            .ok_or(Error::NotFound)?;
-        serde_json::from_str(cookie.value()).map_err(Error::from)
+            .ok_or_else(|| CookieError::NotFound(name.into()))?;
+        let bytes = general_purpose::STANDARD.decode(cookie.value())?;
+        postcard::from_bytes(&bytes).map_err(CookieError::from)
     }
 
     pub fn get_typed<T: DeserializeOwned>(
         &self,
         name: &str,
         cookie_type: &CookieType,
-    ) -> Result<T, Error> {
+    ) -> Result<T, CookieError> {
         match cookie_type {
             CookieType::Plain => self.get(name),
             CookieType::Signed => self.get_signed(name),
@@ -61,17 +69,18 @@ impl CookieStore {
     }
 
     pub fn set<T: Serialize>(&mut self, name: &str, value: &T, options: Option<CookieOptions>) {
-        let value_str = match serde_json::to_string(value) {
+        let bytes = match postcard::to_stdvec(value) {
             Ok(v) => v,
             Err(e) => {
                 tracing::error!("failed to serialize cookie value: {}", e);
                 return;
             }
         };
+        let encoded = general_purpose::STANDARD.encode(&bytes);
         let cookie = if let Some(opts) = options {
-            self.build_cookie(name, &value_str, opts)
+            self.build_cookie(name, &encoded, opts)
         } else {
-            Cookie::new(name.to_owned(), value_str)
+            Cookie::new(name.to_owned(), encoded)
         };
 
         self.jar.add(cookie)
@@ -83,17 +92,18 @@ impl CookieStore {
         value: &T,
         options: Option<CookieOptions>,
     ) {
-        let value_str = match serde_json::to_string(value) {
+        let bytes = match postcard::to_stdvec(value) {
             Ok(v) => v,
             Err(e) => {
                 tracing::error!("failed to serialize cookie value: {}", e);
                 return;
             }
         };
+        let encoded = general_purpose::STANDARD.encode(&bytes);
         let cookie = if let Some(opts) = options {
-            self.build_cookie(name, &value_str, opts)
+            self.build_cookie(name, &encoded, opts)
         } else {
-            Cookie::new(name.to_owned(), value_str)
+            Cookie::new(name.to_owned(), encoded)
         };
 
         self.jar.signed_mut(&self.key().clone()).add(cookie)
@@ -105,17 +115,18 @@ impl CookieStore {
         value: &T,
         options: Option<CookieOptions>,
     ) {
-        let value_str = match serde_json::to_string(value) {
+        let bytes = match postcard::to_stdvec(value) {
             Ok(v) => v,
             Err(e) => {
                 tracing::error!("failed to serialize cookie value: {}", e);
                 return;
             }
         };
+        let encoded = general_purpose::STANDARD.encode(&bytes);
         let cookie = if let Some(opts) = options {
-            self.build_cookie(name, &value_str, opts)
+            self.build_cookie(name, &encoded, opts)
         } else {
-            Cookie::new(name.to_owned(), value_str)
+            Cookie::new(name.to_owned(), encoded)
         };
 
         self.jar.private_mut(&self.key().clone()).add(cookie)
@@ -172,6 +183,7 @@ impl CookieMiddleware {
         Self { key: None }
     }
 
+    #[track_caller]
     pub fn key(mut self, key: impl Into<CookieKey>) -> Self {
         self.key = Some(key.into().into_cookie_key());
         self
@@ -321,10 +333,42 @@ impl From<&str> for CookieKey {
 }
 
 impl CookieKey {
+    #[track_caller]
     fn into_cookie_key(self) -> cookie::Key {
         match self {
             Self::Key(k) => k,
-            Self::Bytes(b) => cookie::Key::from(&b),
+            Self::Bytes(b) => cookie::Key::try_from(b.as_ref()).expect("Invalid cookie key"),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CookieError {
+    #[error("Cookie not found: {0}")]
+    NotFound(SmolStr),
+
+    #[error("Failed to decode cookie value")]
+    Decode(#[from] base64::DecodeError),
+
+    #[error("Failed to deserialize cookie value")]
+    Deserialize(#[from] postcard::Error),
+}
+
+impl From<CookieError> for StatusError {
+    fn from(e: CookieError) -> Self {
+        match e {
+            CookieError::NotFound(name) => {
+                StatusError::bad_request().brief(format!("Cookie not found: {name}"))
+            }
+            CookieError::Decode(_) => StatusError::bad_request().brief("Invalid cookie encoding"),
+            CookieError::Deserialize(ref err) => {
+                use postcard::Error::*;
+                match err {
+                    SerdeDeCustom => StatusError::unprocessable_entity()
+                        .brief("Failed to deserialize cookie value into expected type"),
+                    _ => StatusError::bad_request().brief("Invalid cookie data"),
+                }
+            }
         }
     }
 }

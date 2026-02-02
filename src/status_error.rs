@@ -210,11 +210,8 @@ impl StdError for StatusError {}
 
 impl Display for StatusError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let str_error = format!(
-            "code: {} name: {} brief: {}",
-            self.code, self.name, self.brief
-        );
-        f.write_str(&str_error)
+        // Format: [422 Unprocessable Entity] brief: field is missing
+        write!(f, "[{} {}] brief: {}", self.code, self.name, self.brief)
     }
 }
 

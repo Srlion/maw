@@ -173,7 +173,7 @@ impl Response {
         H: SetIntoHeaders,
     {
         if let Err(e) = headers.into_headers(self.inner.headers_mut()) {
-            tracing::error!("failed to set headers: {}", e);
+            tracing::error!("failed to set headers: {e}");
         }
         self
     }
@@ -197,45 +197,42 @@ impl Response {
         let key = match key.try_into() {
             Ok(k) => k,
             Err(e) => {
-                tracing::error!("failed to convert header name: {}", e);
+                tracing::error!("failed to convert header name: {e}");
                 return self;
             }
         };
         if let Err(e) = values.append_to_header(self.inner.headers_mut(), key) {
-            tracing::error!("failed to append header value: {}", e);
+            tracing::error!("failed to append header value: {e}");
         }
         self
     }
 
     /// Send a *non-streaming* body.
     #[inline]
-    pub fn send(&mut self, body: impl Into<Bytes>) -> &mut Self {
+    pub fn send(&mut self, body: impl Into<Bytes>) {
         *self.inner.body_mut() = HttpBody::full(body.into());
-        self
     }
 
     /// Send a *streaming* body.
     #[inline]
-    pub fn stream<S, E>(&mut self, stream: S) -> &mut Self
+    pub fn stream<S, E>(&mut self, stream: S)
     where
         S: Stream<Item = Result<Bytes, E>> + Send + Sync + 'static,
         E: Into<BoxError> + 'static,
     {
         let mapped = stream.map(|result| result.map_err(|e| e.into()));
         *self.inner.body_mut() = HttpBody::stream(mapped);
-        self
     }
 
     /// Send a *streaming* body with frames.
     #[inline]
-    pub fn stream_frames<S, E>(&mut self, stream: S) -> &mut Self
+    pub fn stream_frames<S, E>(&mut self, stream: S)
     where
         S: Stream<Item = Result<Frame<Bytes>, E>> + Send + Sync + 'static,
         E: Into<BoxError> + 'static,
     {
         let mapped = stream.map(|result| result.map_err(|e| e.into()));
         *self.inner.body_mut() = HttpBody::stream_frames(mapped);
-        self
     }
 
     #[inline]
@@ -248,25 +245,20 @@ impl Response {
     }
 
     #[inline]
-    pub fn html(&mut self, s: &'static str) -> &mut Self {
-        self.status(StatusCode::OK)
-            .send(s)
-            .content_type("text/html; charset=utf-8");
-        self
+    pub fn html(&mut self, s: &'static str) {
+        self.content_type("text/html; charset=utf-8").send(s);
     }
 
     #[inline]
-    pub fn json(&mut self, value: impl serde::Serialize) -> &mut Self {
+    pub fn json(&mut self, value: impl serde::Serialize) {
         match serde_json::to_string(&value) {
             Ok(json_str) => self
-                .status(StatusCode::OK)
-                .send(json_str)
-                .content_type("application/json; charset=utf-8"),
+                .content_type("application/json; charset=utf-8")
+                .send(json_str),
             Err(e) => {
-                tracing::error!("failed to serialize JSON response: {}", e);
+                tracing::error!("failed to serialize JSON response: {e}");
                 self.status(StatusCode::INTERNAL_SERVER_ERROR)
                     .send("Internal Server Error")
-                    .content_type("text/plain; charset=utf-8")
             }
         }
     }
@@ -288,41 +280,39 @@ impl Response {
 
     #[cfg(feature = "minijinja")]
     #[inline]
-    fn get_rendered_template(&self, template: &str, c: minijinja::Value) -> Result<String, Error> {
-        let template = self.app.render_env.get_template(template).map_err(|e| {
-            tracing::warn!("template not found: {}", template);
-            Error::from(e)
-        })?;
-
-        template.render(&c).map_err(|e| {
-            tracing::warn!("failed to render template {}: {}", template.name(), e);
-            Error::from(e)
+    fn get_rendered_template(
+        &self,
+        template: &str,
+        c: minijinja::Value,
+    ) -> Result<String, minijinja::Error> {
+        self.app.jinja.render(template, &c).map_err(|e| {
+            tracing::warn!("failed to render template {template}: {e}");
+            e
         })
     }
 
     #[cfg(feature = "minijinja")]
-    fn render_template(&mut self, template: &str, c: minijinja::Value) -> &mut Self {
+    fn render_template(&mut self, template: &str, c: minijinja::Value) {
         let Ok(rendered) = self.get_rendered_template(template, c) else {
-            return self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
+            self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
+            return;
         };
 
         self.status(StatusCode::OK)
-            .send(rendered)
-            .content_type("text/html; charset=utf-8");
-
-        self
+            .content_type("text/html; charset=utf-8")
+            .send(rendered);
     }
 
     #[cfg(feature = "minijinja")]
     #[inline]
-    pub fn render(&mut self, template: &str) -> &mut Self {
+    pub fn render(&mut self, template: &str) {
         let ctx = self.get_render_ctx();
         self.render_template(template, ctx)
     }
 
     #[cfg(feature = "minijinja")]
     #[inline]
-    pub fn render_with(&mut self, template: &str, value: minijinja::Value) -> &mut Self {
+    pub fn render_with(&mut self, template: &str, value: minijinja::Value) {
         let final_ctx = minijinja::context! {
             ..self.get_render_ctx(),
             ..value,
@@ -332,15 +322,13 @@ impl Response {
 
     /// Redirects to the specified location with an optional status code.
     /// If no status is provided, defaults to 302 Found.
-    pub fn redirect(&mut self, location: impl AsRef<str>, status: Option<StatusCode>) -> &mut Self {
+    pub fn redirect(&mut self, location: impl AsRef<str>, status: Option<StatusCode>) {
         // Set the Location header
         self.set((header::LOCATION, location.as_ref()));
 
         // Set status code (default to 302 Found)
         let status_code = status.unwrap_or(StatusCode::FOUND);
         self.status(status_code);
-
-        self
     }
 }
 
@@ -404,36 +392,36 @@ where
 }
 
 pub trait AppendIntoHeaderValues {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error>;
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error>;
 }
 
 impl AppendIntoHeaderValues for &str {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
-        let value = HeaderValue::try_from(self).map_err(|e| Error::from(http::Error::from(e)))?;
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
+        let value = HeaderValue::try_from(self).map_err(|e| http::Error::from(e))?;
         map.append(key, value);
         Ok(())
     }
 }
 
 impl AppendIntoHeaderValues for String {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
-        let value = HeaderValue::try_from(self).map_err(|e| Error::from(http::Error::from(e)))?;
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
+        let value = HeaderValue::try_from(self).map_err(|e| http::Error::from(e))?;
         map.append(key, value);
         Ok(())
     }
 }
 
 impl AppendIntoHeaderValues for HeaderValue {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         map.append(key, self);
         Ok(())
     }
 }
 
 impl AppendIntoHeaderValues for &[&str] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for &value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -441,10 +429,9 @@ impl AppendIntoHeaderValues for &[&str] {
 }
 
 impl AppendIntoHeaderValues for &[String] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value.as_str())
-                .map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value.as_str()).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -452,9 +439,9 @@ impl AppendIntoHeaderValues for &[String] {
 }
 
 impl AppendIntoHeaderValues for Vec<String> {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -462,9 +449,9 @@ impl AppendIntoHeaderValues for Vec<String> {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for [String; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -472,9 +459,9 @@ impl<const N: usize> AppendIntoHeaderValues for [String; N] {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for [&str; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -482,9 +469,9 @@ impl<const N: usize> AppendIntoHeaderValues for [&str; N] {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for &[String; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -492,9 +479,9 @@ impl<const N: usize> AppendIntoHeaderValues for &[String; N] {
 }
 
 impl<const N: usize> AppendIntoHeaderValues for &[&str; N] {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(*value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(*value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())
@@ -502,9 +489,9 @@ impl<const N: usize> AppendIntoHeaderValues for &[&str; N] {
 }
 
 impl AppendIntoHeaderValues for Vec<&str> {
-    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), Error> {
+    fn append_to_header(self, map: &mut HeaderMap, key: HeaderName) -> Result<(), http::Error> {
         for value in self {
-            let v = HeaderValue::try_from(value).map_err(|e| Error::from(http::Error::from(e)))?;
+            let v = HeaderValue::try_from(value).map_err(|e| http::Error::from(e))?;
             map.append(key.clone(), v);
         }
         Ok(())

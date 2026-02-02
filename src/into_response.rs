@@ -19,11 +19,14 @@ where
     fn into_response(self, c: &mut Ctx) {
         match self {
             Ok(value) => value.into_response(c),
-            Err(e) => {
-                c.res.status(e.code);
-                c.res.send(e.brief);
-            }
+            Err(e) => e.into_response(c),
         }
+    }
+}
+
+impl IntoResponse for crate::status_error::StatusError {
+    fn into_response(self, c: &mut Ctx) {
+        c.res.status(self.code).send(self.brief);
     }
 }
 

@@ -12,13 +12,7 @@ default = []
 
 xml = ["dep:quick-xml"]
 minijinja = ["dep:minijinja", "dep:erased-serde"]
-static_files = [
-    "dep:cap-std",
-    "dep:rust-embed",
-    "tokio/io-util",
-    "tokio/fs",
-    "tokio-util/io",
-]
+static_files = ["dep:rust-embed", "dep:httpdate"]
 
 middleware-cookie = ["dep:cookie"]
 middleware-session = ["middleware-cookie", "serde/derive"]
@@ -77,8 +71,8 @@ rand = { version = "0.9.2", optional = true, default-features = false, features 
 ] }
 constant_time_eq = { version = "0.4.2", optional = true }
 pin-project-lite = { version = "0.2.16", optional = true }
-cap-std = { version = "4.0.0", optional = true }
 rust-embed = { version = "8.11.0", optional = true, features = [
     "debug-embed",
     "interpolate-folder-path",
 ] }
+httpdate = { version = "1.0.3", optional = true }

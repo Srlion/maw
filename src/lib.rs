@@ -19,6 +19,7 @@ mod status_error;
 #[cfg(feature = "static_files")]
 mod static_files;
 
+#[cfg(feature = "static_files")]
 pub use static_files::StaticFiles;
 
 pub mod middlewares {

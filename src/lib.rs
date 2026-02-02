@@ -67,17 +67,20 @@ pub fn all() -> http::Method {
 pub static ALL: LazyLock<http::Method> = LazyLock::new(all);
 
 pub mod prelude {
-    pub use crate::StaticFiles;
     pub use crate::app::App;
     pub use crate::async_fn::AsyncFn1 as Handler;
     pub use crate::ctx::Ctx;
     pub use crate::error::Error as MawError;
     pub use crate::router::{Router, WithState};
+    #[cfg(feature = "static_files")]
+    pub use crate::static_files::StaticFiles;
     pub use crate::status_error::StatusError;
     pub use http::StatusCode;
     pub use http::method::Method;
     #[cfg(feature = "minijinja")]
     pub use minijinja;
+    #[cfg(feature = "static_files")]
+    pub use rust_embed::RustEmbed;
 }
 
 pub use crate::into_response::IntoResponse;

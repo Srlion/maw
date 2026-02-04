@@ -30,6 +30,12 @@ impl IntoResponse for crate::status_error::StatusError {
     }
 }
 
+impl IntoResponse for http::StatusCode {
+    fn into_response(self, c: &mut Ctx) {
+        c.res.send_status(self);
+    }
+}
+
 impl<T> IntoResponse for Option<T>
 where
     T: IntoResponse,

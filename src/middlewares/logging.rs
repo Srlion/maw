@@ -10,15 +10,20 @@ impl LoggingMiddleware {
     }
 }
 
-fn format_duration(d: std::time::Duration) -> String {
-    let secs = d.as_secs_f64();
+struct FormattedDuration(std::time::Duration);
 
-    if secs >= 1.0 {
-        format!("{:.9}s", secs)
-    } else if secs >= 0.001 {
-        format!("{:.3}ms", secs * 1000.0)
-    } else {
-        format!("{:.3}µs", secs * 1_000_000.0)
+impl std::fmt::Display for FormattedDuration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let nanos = self.0.as_nanos() as u64;
+        if nanos >= 1_000_000_000 {
+            let ms = nanos / 1_000_000;
+            write!(f, "{}.{:03}s", ms / 1000, ms % 1000)
+        } else if nanos >= 1_000_000 {
+            let us = nanos / 1_000;
+            write!(f, "{}.{:03}ms", us / 1000, us % 1000)
+        } else {
+            write!(f, "{}.{:03}µs", nanos / 1000, nanos % 1000)
+        }
     }
 }
 
@@ -30,12 +35,10 @@ impl AsyncFn1<&mut Ctx> for LoggingMiddleware {
 
         c.next().await;
 
-        let duration = time.elapsed();
-
         tracing::info!(
             "{} | {:^10} | {} | {:^7} | {}",
             c.res.inner.status().as_u16(),
-            format_duration(duration),
+            FormattedDuration(time.elapsed()),
             c.req.ip(),
             c.req.method().as_str(),
             c.req.uri().path(),

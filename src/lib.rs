@@ -3,9 +3,8 @@ use std::sync::LazyLock;
 pub use http_body_util;
 pub use hyper;
 
-mod any_value_map;
+mod any_map;
 mod app;
-mod async_fn;
 
 mod ctx;
 mod error;
@@ -71,9 +70,9 @@ pub static ALL: LazyLock<http::Method> = LazyLock::new(all);
 
 pub mod prelude {
     pub use crate::app::App;
-    pub use crate::async_fn::Handler;
     pub use crate::ctx::Ctx;
     pub use crate::error::Error as MawError;
+    pub use crate::handler::Handler;
     pub use crate::router::{Router, WithState};
     #[cfg(feature = "static_files")]
     pub use crate::static_files::StaticFiles;

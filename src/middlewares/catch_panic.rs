@@ -9,7 +9,7 @@ use std::{
 use http::StatusCode;
 use pin_project_lite::pin_project;
 
-use crate::{async_fn::Handler, ctx::Ctx};
+use crate::{handler::Handler, ctx::Ctx};
 
 pub struct NoPanicHandler;
 

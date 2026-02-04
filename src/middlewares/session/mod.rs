@@ -10,8 +10,8 @@ use cookie_storage::CookieStorage;
 pub use storage::SessionStorage;
 
 use crate::{
-    async_fn::Handler,
     ctx::Ctx,
+    handler::Handler,
     middlewares::cookie::{CookieOptions, CookieType},
     prelude::StatusError,
 };

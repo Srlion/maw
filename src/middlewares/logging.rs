@@ -1,4 +1,4 @@
-use crate::{async_fn::Handler, ctx::Ctx};
+use crate::{handler::Handler, ctx::Ctx};
 
 pub struct LoggingMiddleware {
     _p: (),

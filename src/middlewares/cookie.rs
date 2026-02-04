@@ -3,7 +3,7 @@ pub use cookie::{Cookie, CookieJar, Key, SameSite};
 use serde::{Serialize, de::DeserializeOwned};
 use smol_str::SmolStr;
 
-use crate::{async_fn::Handler, ctx::Ctx, prelude::StatusError};
+use crate::{handler::Handler, ctx::Ctx, prelude::StatusError};
 
 #[derive(Clone, Debug)]
 pub enum CookieType {

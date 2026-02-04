@@ -6,8 +6,8 @@ use std::{
 use http::Method;
 
 use crate::{
-    async_fn::Handler,
     ctx::Ctx,
+    handler::Handler,
     handler::{DynHandlerRun, HandlerType, HandlerWrapper},
     into_response::IntoResponse,
 };

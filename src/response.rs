@@ -16,7 +16,7 @@ use http_body::{Body as HttpBodyTrait, Frame, SizeHint};
 use http_body_util::Full;
 
 use crate::{
-    any_value_map::{AnyMap, SerializableAny},
+    any_map::{AnyMap, SerializableAny},
     app::App,
     error::Error,
 };

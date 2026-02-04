@@ -1,7 +1,7 @@
 use http::{Method, StatusCode};
 
 use crate::{
-    async_fn::Handler,
+    handler::Handler,
     ctx::Ctx,
     middlewares::cookie::{CookieOptions, CookieType},
 };

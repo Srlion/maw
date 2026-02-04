@@ -1,4 +1,4 @@
-use crate::{async_fn::Handler, ctx::Ctx};
+use crate::{ctx::Ctx, handler::Handler};
 
 pub struct BodyLimitMiddleware {
     max: usize,

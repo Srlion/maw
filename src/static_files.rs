@@ -7,7 +7,7 @@ use http::StatusCode;
 use httpdate::{fmt_http_date, parse_http_date};
 use rust_embed::RustEmbed;
 
-use crate::{async_fn::Handler, ctx::Ctx};
+use crate::{ctx::Ctx, handler::Handler};
 
 pub struct StaticFiles<E> {
     _marker: PhantomData<E>,

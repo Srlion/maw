@@ -12,7 +12,7 @@ use serde::{
 use smol_str::SmolStr;
 
 use crate::{
-    any_value_map::{AnyMap, CloneableAny},
+    any_map::{AnyMap, CloneableAny},
     app::App,
     prelude::StatusError,
 };

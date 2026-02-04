@@ -1,8 +1,14 @@
-use std::{any::Any, fmt::Debug, pin::Pin, sync::Arc};
+use std::{
+    any::Any,
+    fmt::{self, Debug},
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+};
 
 use http::Method;
 
-use crate::{app::App, async_fn::Handler, ctx::Ctx, into_response::IntoResponse};
+use crate::{app::App, ctx::Ctx, into_response::IntoResponse};
 
 pub type DynHandlerRun = Arc<dyn HandlerRun>;
 
@@ -11,12 +17,39 @@ pub enum HandlerType {
     Method(Method),
 }
 
-impl std::fmt::Display for HandlerType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for HandlerType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             HandlerType::Middleware => write!(f, "Middleware"),
             HandlerType::Method(method) => write!(f, "Method({method})"),
         }
+    }
+}
+
+#[allow(non_snake_case)]
+pub trait Handler<Ctx> {
+    type Output;
+    fn call(&self, c: Ctx) -> impl Future<Output = Self::Output> + Send;
+
+    #[allow(unused_variables)]
+    fn on_app_listen_mut(&self, app: &mut App) {}
+
+    #[allow(unused_variables)]
+    fn on_app_listen_arc(&self, app: &Arc<App>) {}
+
+    fn state(&self) -> &dyn std::any::Any {
+        &()
+    }
+}
+
+impl<F: ?Sized, Fut, Ctx> Handler<Ctx> for F
+where
+    F: Fn(Ctx) -> Fut,
+    Fut: Future + Send,
+{
+    type Output = Fut::Output;
+    fn call(&self, c: Ctx) -> impl Future<Output = Self::Output> + Send {
+        (self)(c)
     }
 }
 
@@ -39,7 +72,7 @@ impl<F> HandlerWrapper<F> {
 }
 
 impl<F> Debug for HandlerWrapper<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.handler_type)?;
         #[cfg(debug_assertions)]
         write!(f, ": {}", self.location)?;

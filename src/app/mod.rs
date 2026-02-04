@@ -20,7 +20,7 @@ pub use jinja::Jinja;
 
 use crate::{
     ALL,
-    any_value_map::{AnyMap, SerializableAny},
+    any_map::{AnyMap, SerializableAny},
     error::Error,
     request::Request,
     response::{HttpBody, Response},

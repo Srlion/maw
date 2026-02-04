@@ -214,7 +214,7 @@ impl App {
 
                     let conn = server.serve_connection_with_upgrades(io, service);
                     let fut = graceful.watch(conn.into_owned());
-                    tokio::task::spawn(async move {
+                    tokio::spawn(async move {
                         if let Err(e) = fut.await {
                             tracing::trace!("connection failed: {e:?}");
                         }

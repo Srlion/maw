@@ -8,17 +8,17 @@ use http::Method;
 use crate::{
     async_fn::AsyncFn1,
     ctx::Ctx,
-    handler::{Handler, HandlerType, HandlerWrapper},
+    handler::{DynHandlerRun, HandlerType, HandlerWrapper},
     into_response::IntoResponse,
 };
 
-pub type Handlers = HashMap<Method, Arc<[Handler]>>;
+pub type Handlers = HashMap<Method, Arc<[DynHandlerRun]>>;
 
 pub(crate) type MatchRouter = matchit::Router<Handlers>;
 
 #[derive(Clone)]
 pub(crate) enum RouterItem {
-    Handler(Handler),
+    Handler(DynHandlerRun),
     Child(Box<Router>),
 }
 
@@ -136,12 +136,12 @@ impl Router {
     fn walk(
         base: &str,
         router: &Router,
-        inherited_mw: &[Handler],
+        inherited_mw: &[DynHandlerRun],
         out: &mut BTreeMap<String, Handlers>,
     ) {
         let path = join_paths(base, &router.path);
 
-        let mut method_handlers: HashMap<Method, Arc<[Handler]>> = HashMap::default();
+        let mut method_handlers: HashMap<Method, Arc<[DynHandlerRun]>> = HashMap::default();
         let mut inherited_for_children = inherited_mw.to_vec(); // Only global middlewares for children
 
         // Process items in order

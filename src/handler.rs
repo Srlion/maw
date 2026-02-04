@@ -4,7 +4,7 @@ use http::Method;
 
 use crate::{app::App, async_fn::AsyncFn1, ctx::Ctx, into_response::IntoResponse};
 
-pub type Handler = Arc<dyn HandlerRun>;
+pub type DynHandlerRun = Arc<dyn HandlerRun>;
 
 pub enum HandlerType {
     Middleware,

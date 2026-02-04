@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use crate::{app::App, handler::Handler, request::Request, response::Response};
+use crate::{app::App, handler::DynHandlerRun, request::Request, response::Response};
 
 pub struct Ctx {
     pub req: Request,
     pub res: Response,
-    pub(crate) handlers: Arc<[Handler]>,
+    pub(crate) handlers: Arc<[DynHandlerRun]>,
     pub(crate) index_handler: usize,
     closed: bool,
     #[cfg(feature = "middleware-cookie")]
@@ -15,7 +15,7 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    pub(crate) fn new(req: Request, res: Response, handlers: Arc<[Handler]>) -> Self {
+    pub(crate) fn new(req: Request, res: Response, handlers: Arc<[DynHandlerRun]>) -> Self {
         Self {
             req,
             res,
@@ -30,7 +30,7 @@ impl Ctx {
     }
 
     #[inline]
-    pub fn handlers(&self) -> &[Handler] {
+    pub fn handlers(&self) -> &[DynHandlerRun] {
         &self.handlers
     }
 

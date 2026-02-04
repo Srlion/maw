@@ -1,4 +1,4 @@
-use crate::{async_fn::AsyncFn1, ctx::Ctx};
+use crate::{async_fn::Handler, ctx::Ctx};
 
 pub struct BodyLimitMiddleware {
     max: usize,
@@ -10,7 +10,7 @@ impl BodyLimitMiddleware {
     }
 }
 
-impl AsyncFn1<&mut Ctx> for BodyLimitMiddleware {
+impl Handler<&mut Ctx> for BodyLimitMiddleware {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {

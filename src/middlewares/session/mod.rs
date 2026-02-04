@@ -10,7 +10,7 @@ use cookie_storage::CookieStorage;
 pub use storage::SessionStorage;
 
 use crate::{
-    async_fn::AsyncFn1,
+    async_fn::Handler,
     ctx::Ctx,
     middlewares::cookie::{CookieOptions, CookieType},
     prelude::StatusError,
@@ -152,7 +152,7 @@ impl<S: SessionStorage> SessionMiddleware<S> {
     }
 }
 
-impl<S: SessionStorage> AsyncFn1<&mut Ctx> for SessionMiddleware<S> {
+impl<S: SessionStorage> Handler<&mut Ctx> for SessionMiddleware<S> {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) {

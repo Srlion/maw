@@ -6,7 +6,7 @@ use std::{
 use http::Method;
 
 use crate::{
-    async_fn::AsyncFn1,
+    async_fn::Handler,
     ctx::Ctx,
     handler::{DynHandlerRun, HandlerType, HandlerWrapper},
     into_response::IntoResponse,
@@ -32,7 +32,7 @@ pub struct Router {
 
 pub struct WithState<S, F>(pub S, pub F);
 
-impl<'a, S, F, Fut> AsyncFn1<&'a mut Ctx> for WithState<S, F>
+impl<'a, S, F, Fut> Handler<&'a mut Ctx> for WithState<S, F>
 where
     S: Clone + Send + Sync + 'static,
     F: Fn(&'a mut Ctx, S) -> Fut + Sync,
@@ -79,7 +79,7 @@ impl Router {
     #[inline(never)]
     fn handle<F, R>(&self, method: Method, f: F, skip: usize) -> Self
     where
-        F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        F: for<'a> Handler<&'a mut Ctx, Output = R> + Send + Sync + 'static,
         R: IntoResponse + Send,
     {
         let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Method(method), skip));
@@ -98,7 +98,7 @@ impl Router {
     #[inline(never)]
     fn middleware_impl<F, R>(&self, f: F, skip: usize) -> Self
     where
-        F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        F: for<'a> Handler<&'a mut Ctx, Output = R> + Send + Sync + 'static,
         R: IntoResponse + Send,
     {
         let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Middleware, skip));
@@ -278,7 +278,7 @@ pub trait IntoHandler {
 
 impl<F, R> IntoHandler for F
 where
-    F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+    F: for<'a> Handler<&'a mut Ctx, Output = R> + Send + Sync + 'static,
     R: IntoResponse + Send,
 {
     fn into_middleware(self, router: &Router, skip: usize) -> Router {

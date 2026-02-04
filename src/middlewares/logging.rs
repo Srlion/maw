@@ -1,4 +1,4 @@
-use crate::{async_fn::AsyncFn1, ctx::Ctx};
+use crate::{async_fn::Handler, ctx::Ctx};
 
 pub struct LoggingMiddleware {
     _p: (),
@@ -27,7 +27,7 @@ impl std::fmt::Display for FormattedDuration {
     }
 }
 
-impl AsyncFn1<&mut Ctx> for LoggingMiddleware {
+impl Handler<&mut Ctx> for LoggingMiddleware {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {

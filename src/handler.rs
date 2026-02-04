@@ -2,7 +2,7 @@ use std::{any::Any, fmt::Debug, pin::Pin, sync::Arc};
 
 use http::Method;
 
-use crate::{app::App, async_fn::AsyncFn1, ctx::Ctx, into_response::IntoResponse};
+use crate::{app::App, async_fn::Handler, ctx::Ctx, into_response::IntoResponse};
 
 pub type DynHandlerRun = Arc<dyn HandlerRun>;
 
@@ -73,7 +73,7 @@ impl dyn HandlerRun {
 
 impl<F, R> HandlerRun for HandlerWrapper<F>
 where
-    F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+    F: for<'a> Handler<&'a mut Ctx, Output = R> + Send + Sync + 'static,
     R: IntoResponse + Send,
 {
     fn run<'s, 'c, 'a>(&'s self, c: &'c mut Ctx) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>

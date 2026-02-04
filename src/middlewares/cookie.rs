@@ -3,7 +3,7 @@ pub use cookie::{Cookie, CookieJar, Key, SameSite};
 use serde::{Serialize, de::DeserializeOwned};
 use smol_str::SmolStr;
 
-use crate::{async_fn::AsyncFn1, ctx::Ctx, prelude::StatusError};
+use crate::{async_fn::Handler, ctx::Ctx, prelude::StatusError};
 
 #[derive(Clone, Debug)]
 pub enum CookieType {
@@ -190,7 +190,7 @@ impl CookieMiddleware {
     }
 }
 
-impl AsyncFn1<&mut Ctx> for CookieMiddleware {
+impl Handler<&mut Ctx> for CookieMiddleware {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {

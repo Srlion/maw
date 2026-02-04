@@ -7,7 +7,7 @@ use http::StatusCode;
 use httpdate::{fmt_http_date, parse_http_date};
 use rust_embed::RustEmbed;
 
-use crate::{async_fn::AsyncFn1, ctx::Ctx};
+use crate::{async_fn::Handler, ctx::Ctx};
 
 pub struct StaticFiles<E> {
     _marker: PhantomData<E>,
@@ -49,7 +49,7 @@ impl<E> Clone for StaticFiles<E> {
     }
 }
 
-impl<E: RustEmbed + Sync> AsyncFn1<&mut Ctx> for StaticFiles<E> {
+impl<E: RustEmbed + Sync> Handler<&mut Ctx> for StaticFiles<E> {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {

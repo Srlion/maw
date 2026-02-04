@@ -9,7 +9,7 @@ use std::{
 use http::StatusCode;
 use pin_project_lite::pin_project;
 
-use crate::{async_fn::AsyncFn1, ctx::Ctx};
+use crate::{async_fn::Handler, ctx::Ctx};
 
 pub struct NoPanicHandler;
 
@@ -31,7 +31,7 @@ impl<F> CatchPanicMiddleware<F> {
     }
 }
 
-impl AsyncFn1<&mut Ctx> for CatchPanicMiddleware<NoPanicHandler> {
+impl Handler<&mut Ctx> for CatchPanicMiddleware<NoPanicHandler> {
     type Output = ();
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {
@@ -43,7 +43,7 @@ impl AsyncFn1<&mut Ctx> for CatchPanicMiddleware<NoPanicHandler> {
     }
 }
 
-impl<'a, F, Fut> AsyncFn1<&'a mut Ctx> for CatchPanicMiddleware<F>
+impl<'a, F, Fut> Handler<&'a mut Ctx> for CatchPanicMiddleware<F>
 where
     F: Fn(&'a mut Ctx, Box<dyn Any + Send + 'static>) -> Fut + Sync,
     Fut: Future + Send,

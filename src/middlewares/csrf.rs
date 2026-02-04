@@ -1,7 +1,7 @@
 use http::{Method, StatusCode};
 
 use crate::{
-    async_fn::AsyncFn1,
+    async_fn::Handler,
     ctx::Ctx,
     middlewares::cookie::{CookieOptions, CookieType},
 };
@@ -102,7 +102,7 @@ impl Ctx {
     }
 }
 
-impl AsyncFn1<&mut Ctx> for CsrfMiddleware {
+impl Handler<&mut Ctx> for CsrfMiddleware {
     type Output = ();
 
     fn on_app_listen_mut(&self, app: &mut crate::prelude::App) {

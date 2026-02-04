@@ -5,7 +5,7 @@ use std::{future::Future, sync::Arc};
 use crate::app::App;
 
 #[allow(non_snake_case)]
-pub trait AsyncFn1<Ctx> {
+pub trait Handler<Ctx> {
     type Output;
     fn call(&self, c: Ctx) -> impl Future<Output = Self::Output> + Send;
 
@@ -20,7 +20,7 @@ pub trait AsyncFn1<Ctx> {
     }
 }
 
-impl<F: ?Sized, Fut, Ctx> AsyncFn1<Ctx> for F
+impl<F: ?Sized, Fut, Ctx> Handler<Ctx> for F
 where
     F: Fn(Ctx) -> Fut,
     Fut: Future + Send,

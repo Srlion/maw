@@ -2,12 +2,7 @@ use std::{any::Any, fmt::Debug, pin::Pin, sync::Arc};
 
 use http::Method;
 
-use crate::{
-    app::App,
-    async_fn::{AsyncFn1, AsyncFn2},
-    ctx::Ctx,
-    into_response::IntoResponse,
-};
+use crate::{app::App, async_fn::AsyncFn1, ctx::Ctx, into_response::IntoResponse};
 
 pub type Handler = Arc<dyn HandlerRun>;
 
@@ -25,67 +20,25 @@ impl std::fmt::Display for HandlerType {
     }
 }
 
-// Helper trait to unify handlers with/without state
-pub trait HandlerCall<S>: Send + Sync {
-    type Output: IntoResponse + Send;
-    fn call(&self, c: &mut Ctx, state: &S) -> impl Future<Output = Self::Output> + Send;
-
-    fn on_app_listen_mut(&self, _: &mut App) {}
-    fn on_app_listen_arc(&self, _: &Arc<App>) {}
-}
-
-impl<F, R> HandlerCall<()> for F
-where
-    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync,
-    R: IntoResponse + Send,
-{
-    type Output = R;
-    async fn call(&self, c: &mut Ctx, _: &()) -> Self::Output {
-        self.call(c).await
-    }
-
-    fn on_app_listen_mut(&self, a: &mut App) {
-        self.on_app_listen_mut(a);
-    }
-
-    fn on_app_listen_arc(&self, a: &Arc<App>) {
-        self.on_app_listen_arc(a);
-    }
-}
-
-impl<F, R, S> HandlerCall<(S,)> for F
-where
-    for<'a> F: AsyncFn2<&'a mut Ctx, S, Output = R> + Send + Sync,
-    S: Clone + Sync,
-    R: IntoResponse + Send,
-{
-    type Output = R;
-    async fn call(&self, c: &mut Ctx, state: &(S,)) -> Self::Output {
-        self.call(c, state.0.clone()).await
-    }
-}
-
-pub(crate) struct HandlerWrapper<F, S = ()> {
+pub(crate) struct HandlerWrapper<F> {
     pub(crate) f: F,
     pub(crate) handler_type: HandlerType,
     #[cfg(debug_assertions)]
     pub(crate) location: String,
-    pub(crate) state: S,
 }
 
-impl<F, S> HandlerWrapper<F, S> {
-    pub(crate) fn new(f: F, state: S, handler_type: HandlerType, _skip: usize) -> Self {
+impl<F> HandlerWrapper<F> {
+    pub(crate) fn new(f: F, handler_type: HandlerType, _skip: usize) -> Self {
         Self {
             f,
             handler_type,
             #[cfg(debug_assertions)]
             location: caller_location(_skip),
-            state,
         }
     }
 }
 
-impl<F, S> Debug for HandlerWrapper<F, S> {
+impl<F> Debug for HandlerWrapper<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.handler_type)?;
         #[cfg(debug_assertions)]
@@ -118,10 +71,10 @@ impl dyn HandlerRun {
     }
 }
 
-impl<F, S> HandlerRun for HandlerWrapper<F, S>
+impl<F, R> HandlerRun for HandlerWrapper<F>
 where
-    F: HandlerCall<S>,
-    S: Clone + Send + Sync + 'static,
+    F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+    R: IntoResponse + Send,
 {
     fn run<'s, 'c, 'a>(&'s self, c: &'c mut Ctx) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
     where
@@ -130,8 +83,7 @@ where
         Self: 'a,
     {
         Box::pin(async move {
-            let result = self.f.call(c, &self.state).await;
-            result.into_response(c);
+            self.f.call(c).await.into_response(c);
         })
     }
 
@@ -140,21 +92,18 @@ where
     }
 
     fn state(&self) -> &dyn Any {
-        &self.state
+        self.f.state()
     }
 
-    fn on_app_listen_mut(&self, a: &mut crate::app::App) {
+    fn on_app_listen_mut(&self, a: &mut App) {
         self.f.on_app_listen_mut(a);
     }
 
-    fn on_app_listen_arc(&self, a: &Arc<crate::app::App>) {
+    fn on_app_listen_arc(&self, a: &Arc<App>) {
         self.f.on_app_listen_arc(a);
     }
 
-    fn type_id(&self) -> std::any::TypeId
-    where
-        Self: 'static,
-    {
+    fn type_id(&self) -> std::any::TypeId {
         self.f.type_id()
     }
 }

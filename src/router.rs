@@ -6,9 +6,9 @@ use std::{
 use http::Method;
 
 use crate::{
-    async_fn::{AsyncFn1, AsyncFn2},
+    async_fn::AsyncFn1,
     ctx::Ctx,
-    handler::{Handler, HandlerCall, HandlerType, HandlerWrapper},
+    handler::{Handler, HandlerType, HandlerWrapper},
     into_response::IntoResponse,
 };
 
@@ -30,7 +30,24 @@ pub struct Router {
     items: Arc<Mutex<Vec<RouterItem>>>,
 }
 
-pub struct WithState<F, S>(pub S, pub F);
+pub struct WithState<S, F>(pub S, pub F);
+
+impl<'a, S, F, Fut> AsyncFn1<&'a mut Ctx> for WithState<S, F>
+where
+    S: Clone + Send + Sync + 'static,
+    F: Fn(&'a mut Ctx, S) -> Fut + Sync,
+    Fut: Future + Send,
+{
+    type Output = Fut::Output;
+
+    async fn call(&self, c: &'a mut Ctx) -> Self::Output {
+        (self.1)(c, self.0.clone()).await
+    }
+
+    fn state(&self) -> &dyn std::any::Any {
+        &self.0
+    }
+}
 
 impl Router {
     #[inline(never)]
@@ -60,17 +77,12 @@ impl Router {
     }
 
     #[inline(never)]
-    fn handle<F, S>(&self, method: Method, f: F, state: S, skip: usize) -> Self
+    fn handle<F, R>(&self, method: Method, f: F, skip: usize) -> Self
     where
-        F: HandlerCall<S> + 'static,
-        S: Clone + Send + Sync + 'static,
+        F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
     {
-        let handler = Arc::new(HandlerWrapper::new(
-            f,
-            state,
-            HandlerType::Method(method),
-            skip,
-        ));
+        let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Method(method), skip));
         self.items
             .lock()
             .unwrap()
@@ -84,12 +96,12 @@ impl Router {
     }
 
     #[inline(never)]
-    fn middleware_impl<F, S>(&self, f: F, state: S, skip: usize) -> Self
+    fn middleware_impl<F, R>(&self, f: F, skip: usize) -> Self
     where
-        F: HandlerCall<S> + 'static,
-        S: Clone + Send + Sync + 'static,
+        F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+        R: IntoResponse + Send,
     {
-        let handler = Arc::new(HandlerWrapper::new(f, state, HandlerType::Middleware, skip));
+        let handler = Arc::new(HandlerWrapper::new(f, HandlerType::Middleware, skip));
         self.items
             .lock()
             .unwrap()
@@ -266,30 +278,15 @@ pub trait IntoHandler {
 
 impl<F, R> IntoHandler for F
 where
-    for<'a> F: AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
+    F: for<'a> AsyncFn1<&'a mut Ctx, Output = R> + Send + Sync + 'static,
     R: IntoResponse + Send,
 {
     fn into_middleware(self, router: &Router, skip: usize) -> Router {
-        router.middleware_impl(self, (), skip + 1)
+        router.middleware_impl(self, skip + 1)
     }
 
     fn into_handler(self, router: &Router, method: Method, skip: usize) -> Router {
-        router.handle(method, self, (), skip + 1)
-    }
-}
-
-impl<F, R, S> IntoHandler for WithState<F, S>
-where
-    for<'a> F: AsyncFn2<&'a mut Ctx, S, Output = R> + Send + Sync + 'static,
-    R: IntoResponse + Send,
-    S: Clone + Send + Sync + 'static,
-{
-    fn into_middleware(self, router: &Router, skip: usize) -> Router {
-        router.middleware_impl(self.1, (self.0,), skip + 1)
-    }
-
-    fn into_handler(self, router: &Router, method: Method, skip: usize) -> Router {
-        router.handle(method, self.1, (self.0,), skip + 1)
+        router.handle(method, self, skip + 1)
     }
 }
 

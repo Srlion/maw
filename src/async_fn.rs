@@ -4,36 +4,29 @@ use std::{future::Future, sync::Arc};
 
 use crate::app::App;
 
-macro_rules! impl_async_fn {
-    ($n:tt, [$($arg:ident),*]) => {
-        paste::paste! {
-            #[allow(non_snake_case)]
-            pub trait [<AsyncFn $n>]<$($arg),*> {
-                type Output;
+#[allow(non_snake_case)]
+pub trait AsyncFn1<Ctx> {
+    type Output;
+    fn call(&self, c: Ctx) -> impl Future<Output = Self::Output> + Send;
 
-                fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send;
+    #[allow(unused_variables)]
+    fn on_app_listen_mut(&self, app: &mut App) {}
 
-                #[allow(unused_variables)]
-                fn on_app_listen_mut(&self, app: &mut App) {}
-                #[allow(unused_variables)]
-                fn on_app_listen_arc(&self, app: &Arc<App>) {}
-            }
+    #[allow(unused_variables)]
+    fn on_app_listen_arc(&self, app: &Arc<App>) {}
 
-            #[allow(non_snake_case)]
-            impl<F: ?Sized, Fut, $($arg),*> [<AsyncFn $n>]<$($arg),*> for F
-            where
-                F: Fn($($arg),*) -> Fut,
-                Fut: Future + Send,
-            {
-                type Output = Fut::Output;
-
-                fn call(&self, $($arg: $arg),*) -> impl Future<Output = Self::Output> + Send {
-                    (self)($($arg),*)
-                }
-            }
-        }
-    };
+    fn state(&self) -> &dyn std::any::Any {
+        &()
+    }
 }
 
-impl_async_fn!(1, [Arg0]);
-impl_async_fn!(2, [Arg0, Arg1]);
+impl<F: ?Sized, Fut, Ctx> AsyncFn1<Ctx> for F
+where
+    F: Fn(Ctx) -> Fut,
+    Fut: Future + Send,
+{
+    type Output = Fut::Output;
+    fn call(&self, c: Ctx) -> impl Future<Output = Self::Output> + Send {
+        (self)(c)
+    }
+}

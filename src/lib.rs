@@ -19,6 +19,9 @@ mod status_error;
 #[cfg(feature = "static_files")]
 mod static_files;
 
+#[cfg(feature = "websocket")]
+mod websocket;
+
 #[cfg(feature = "static_files")]
 pub use static_files::StaticFiles;
 
@@ -77,6 +80,8 @@ pub mod prelude {
     pub use crate::status_error::StatusError;
     pub use http::StatusCode;
     pub use http::method::Method;
+    #[cfg(feature = "websocket")]
+    pub use hyper_tungstenite::tungstenite::{Error as WsError, Message as WsMessage};
     #[cfg(feature = "minijinja")]
     pub use minijinja;
     #[cfg(feature = "static_files")]

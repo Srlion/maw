@@ -5,8 +5,8 @@ use std::{
 };
 
 use http::StatusCode;
-use hyper::{Request as HyperRequest, body::Incoming as IncomingBody, server::conn::http1};
-use hyper_util::rt::TokioIo;
+use hyper::{Request as HyperRequest, body::Incoming as IncomingBody};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use smol_str::SmolStr;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -197,7 +197,7 @@ impl App {
         let listener = TcpListener::bind(addr).await?;
         tracing::info!("Http app listening on http://{}", addr);
 
-        let http = http1::Builder::new();
+        let server = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
         let graceful = hyper_util::server::graceful::GracefulShutdown::new();
 
         let _ = shutdown
@@ -212,8 +212,8 @@ impl App {
                         handle_request(req, app.clone(), peer_addr)
                     });
 
-                    let conn = http.serve_connection(io, service);
-                    let fut = graceful.watch(conn);
+                    let conn = server.serve_connection_with_upgrades(io, service);
+                    let fut = graceful.watch(conn.into_owned());
                     tokio::task::spawn(async move {
                         if let Err(e) = fut.await {
                             tracing::trace!("connection failed: {e:?}");

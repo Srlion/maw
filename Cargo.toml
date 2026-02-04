@@ -13,6 +13,7 @@ default = []
 xml = ["dep:quick-xml"]
 minijinja = ["dep:minijinja", "dep:erased-serde"]
 static_files = ["dep:rust-embed", "dep:httpdate"]
+websocket = ["dep:hyper-tungstenite"]
 
 middleware-cookie = ["dep:cookie", "dep:postcard", "dep:base64"]
 middleware-session = ["middleware-cookie", "serde/derive", "dep:rand"]
@@ -30,7 +31,7 @@ middleware = [
     "middleware-body_limit",
 ]
 
-full = ["xml", "minijinja", "static_files", "middleware"]
+full = ["xml", "minijinja", "static_files", "websocket", "middleware"]
 
 # for examples
 [dev-dependencies]
@@ -64,6 +65,10 @@ required-features = ["minijinja"]
 name = "redis_session"
 required-features = ["middleware-session"]
 
+[[example]]
+name = "websocket"
+required-features = ["websocket"]
+
 [dependencies]
 matchit = "0.9.1"
 mime_guess = "2.0.5"
@@ -81,6 +86,7 @@ hyper-util = { version = "0.1.19", features = [
     "server",
     "server-graceful",
     "http1",
+    "server-auto",
 ] }
 paste = "1.0.15"
 minijinja = { version = "2.15.1", optional = true, features = [
@@ -110,3 +116,4 @@ rust-embed = { version = "8.11.0", optional = true, features = [
     "interpolate-folder-path",
 ] }
 httpdate = { version = "1.0.3", optional = true }
+hyper-tungstenite = { version = "0.19.0", optional = true }

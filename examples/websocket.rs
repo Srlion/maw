@@ -7,7 +7,7 @@ async fn main() -> Result<(), MawError> {
     let app = App::new().router(
         Router::new()
             // Basic echo server
-            .ws("/ws", |mut ws| async move {
+            .ws("/ws", async |mut ws| {
                 while let Some(Ok(msg)) = ws.recv().await {
                     match msg {
                         WsMessage::Text(txt) => {
@@ -23,7 +23,7 @@ async fn main() -> Result<(), MawError> {
             })
             // this ^ is equivalent to this v, use the latter if you need access to the request context
             .get("/ws2", async |c: &mut Ctx| {
-                c.upgrade_websocket(|mut ws| async move {
+                c.upgrade_websocket(async move |mut ws| {
                     while let Some(Ok(msg)) = ws.recv().await {
                         match msg {
                             WsMessage::Text(txt) => {

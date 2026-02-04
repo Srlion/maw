@@ -148,7 +148,7 @@ maw = { version = "0.19", features = ["minijinja", "websocket"] }
 ```
 
 | Feature | What |
-|---------|------|
+| ------- | ---- |
 | `minijinja` | Template rendering |
 | `xml` | XML request/response support |
 | `websocket` | WebSocket support |

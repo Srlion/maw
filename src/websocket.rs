@@ -22,9 +22,12 @@ use crate::{
 
 pub type WsError = tungstenite::Error;
 
+#[derive(Debug, thiserror::Error)]
 pub enum WsUpgradeError {
+    #[error("not a websocket upgrade request")]
     NotWebSocket,
-    Upgrade(hyper_tungstenite::tungstenite::error::ProtocolError),
+    #[error("websocket upgrade failed: {0}")]
+    Upgrade(#[from] hyper_tungstenite::tungstenite::error::ProtocolError),
 }
 
 impl From<WsUpgradeError> for StatusError {
@@ -119,9 +122,7 @@ impl Ctx {
         *request.headers_mut() = self.req.parts.headers.clone();
         *request.extensions_mut() = std::mem::take(&mut self.req.parts.extensions);
 
-        let (response, ws_future) =
-            hyper_tungstenite::upgrade(&mut request, None).map_err(WsUpgradeError::Upgrade)?;
-
+        let (response, ws_future) = hyper_tungstenite::upgrade(&mut request, None)?;
         let (parts, _) = response.into_parts();
         self.res.inner = http::Response::from_parts(parts, crate::response::HttpBody::Empty);
 

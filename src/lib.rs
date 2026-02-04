@@ -27,7 +27,7 @@ pub mod middlewares {
     pub mod cookie;
 
     #[cfg(feature = "middleware-session")]
-    pub(crate) mod session;
+    pub mod session;
 
     #[cfg(feature = "middleware-csrf")]
     pub mod csrf;

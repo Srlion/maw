@@ -3,6 +3,12 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use smol_str::SmolStr;
 
+mod cookie_storage;
+mod storage;
+
+use cookie_storage::CookieStorage;
+pub use storage::SessionStorage;
+
 use crate::{
     async_fn::AsyncFn1,
     ctx::Ctx,
@@ -72,7 +78,9 @@ impl SessionStore {
 
 /// Has to be used after cookie middleware
 #[derive(Clone, Debug)]
-pub struct SessionMiddleware {
+pub struct SessionMiddleware<S: SessionStorage = CookieStorage> {
+    storage: S,
+
     /// Name of the session cookie
     ///
     /// Default: "maw.session"
@@ -88,7 +96,33 @@ pub struct SessionMiddleware {
 impl SessionMiddleware {
     /// Create a new SessionConfig with default values
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            storage: CookieStorage::default(),
+            cookie_name: "maw.session".into(),
+            cookie_type: CookieType::Signed,
+            cookie_options: CookieOptions::new()
+                .path("/")
+                .http_only(true)
+                .secure(true)
+                .same_site(cookie::SameSite::Lax),
+        }
+    }
+}
+
+impl Default for SessionMiddleware {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<S: SessionStorage> SessionMiddleware<S> {
+    pub fn storage<T: SessionStorage>(self, storage: T) -> SessionMiddleware<T> {
+        SessionMiddleware {
+            storage,
+            cookie_name: self.cookie_name,
+            cookie_type: self.cookie_type,
+            cookie_options: self.cookie_options,
+        }
     }
 
     /// Set the name of the session cookie
@@ -102,63 +136,67 @@ impl SessionMiddleware {
     /// Set the cookie type for the session cookie
     ///
     /// Default: CookieType::Signed
-    pub fn cookie_type(mut self, cookie_type: CookieType) -> Self {
+    pub fn cookie_type(mut self, t: CookieType) -> Self {
         assert!(
-            !matches!(cookie_type, CookieType::Plain),
-            "Session cookie type cannot be Plain for security reasons"
+            !matches!(t, CookieType::Plain),
+            "Session cookie cannot be Plain"
         );
-        self.cookie_type = cookie_type;
+        self.cookie_type = t;
         self
     }
 
     /// Set the cookie options for the session cookie
-    pub fn cookie_options(mut self, options: CookieOptions) -> Self {
-        self.cookie_options = options;
+    pub fn cookie_options(mut self, opts: CookieOptions) -> Self {
+        self.cookie_options = opts;
         self
     }
 }
 
-impl Default for SessionMiddleware {
-    fn default() -> Self {
-        Self {
-            cookie_name: "maw.session".to_string(),
-            cookie_type: CookieType::Signed,
-            cookie_options: CookieOptions::new()
-                .path("/")
-                .http_only(true)
-                .secure(true)
-                .same_site(cookie::SameSite::Lax),
-        }
-    }
-}
-
-impl AsyncFn1<&mut Ctx> for SessionMiddleware {
+impl<S: SessionStorage> AsyncFn1<&mut Ctx> for SessionMiddleware<S> {
     type Output = ();
 
-    async fn call(&self, c: &mut Ctx) -> Self::Output {
-        // Load session from cookie
-        {
-            let session = c
+    async fn call(&self, c: &mut Ctx) {
+        if S::INLINE {
+            c.session = c
                 .cookies
-                .get_typed::<SessionStore>(&self.cookie_name, &self.cookie_type)
+                .get_typed(&self.cookie_name, &self.cookie_type)
                 .unwrap_or_default();
 
-            c.session = session;
-        }
+            c.next().await;
 
-        c.next().await;
+            if c.session.is_modified() {
+                let session = std::mem::take(&mut c.session);
+                c.cookies.set_typed(
+                    &self.cookie_name,
+                    &session,
+                    &self.cookie_type,
+                    Some(self.cookie_options.clone()),
+                );
+            }
+        } else {
+            let sid: Option<String> = c
+                .cookies
+                .get_typed(&self.cookie_name, &self.cookie_type)
+                .ok();
 
-        // Save session to cookie if modified
-        if c.session.is_modified() {
-            let cookie_name = &self.cookie_name.clone();
-            let cookie_options = self.cookie_options.clone();
-            let session = std::mem::take(&mut c.session);
-            c.cookies.set_typed(
-                cookie_name,
-                &session,
-                &self.cookie_type,
-                Some(cookie_options),
-            );
+            c.session = match &sid {
+                Some(id) => self.storage.load(id).await.unwrap_or_default(),
+                None => SessionStore::default(),
+            };
+
+            c.next().await;
+
+            if c.session.is_modified() {
+                let session = std::mem::take(&mut c.session);
+                let id = sid.unwrap_or_else(|| self.storage.generate_id());
+                self.storage.save(&id, &session).await;
+                c.cookies.set_typed(
+                    &self.cookie_name,
+                    &id,
+                    &self.cookie_type,
+                    Some(self.cookie_options.clone()),
+                );
+            }
         }
     }
 }

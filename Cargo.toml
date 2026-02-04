@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.19.1"
+version = "0.19.2"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 license = "MIT"
@@ -15,7 +15,7 @@ minijinja = ["dep:minijinja", "dep:erased-serde"]
 static_files = ["dep:rust-embed", "dep:httpdate"]
 
 middleware-cookie = ["dep:cookie", "dep:postcard", "dep:base64"]
-middleware-session = ["middleware-cookie", "serde/derive"]
+middleware-session = ["middleware-cookie", "serde/derive", "dep:rand"]
 middleware-logging = []
 middleware-csrf = ["middleware-cookie", "dep:rand", "dep:constant_time_eq"]
 middleware-catch_panic = ["dep:pin-project-lite"]
@@ -36,6 +36,7 @@ full = ["xml", "minijinja", "static_files", "middleware"]
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3"
+redis = { version = "1.0", features = ["tokio-comp"] }
 
 [[example]]
 name = "hello_world"
@@ -58,6 +59,10 @@ required-features = ["static_files"]
 [[example]]
 name = "templates"
 required-features = ["minijinja"]
+
+[[example]]
+name = "redis_session"
+required-features = ["middleware-session"]
 
 [dependencies]
 matchit = "0.9.1"

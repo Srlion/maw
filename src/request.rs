@@ -5,7 +5,7 @@ use http::{HeaderMap, HeaderValue, Method, Uri, Version, header::AsHeaderName};
 use http_body_util::BodyExt;
 use hyper::body::Incoming as IncomingBody;
 use mime_guess::{Mime, mime};
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use smol_str::SmolStr;
 
 use crate::{
@@ -55,10 +55,23 @@ impl Request {
         &self.app
     }
 
+    /// Get a path parameter and deserialize it into type `T`.
+    ///
+    /// Works with any type implementing `DeserializeOwned`: primitives,
+    /// `String`, enums, newtypes, etc.
+    ///
+    /// For borrowing as `&str` without allocation, use [`param_str`](Self::param_str).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let id: u32 = req.param("id")?;
+    /// let name: String = req.param("name")?;
+    /// ```
     #[inline]
-    pub fn param<'a, T>(&'a self, key: &str) -> Result<T, ParamError>
+    pub fn param<T>(&self, key: &str) -> Result<T, ParamError>
     where
-        T: Deserialize<'a>,
+        T: DeserializeOwned,
     {
         let value = self
             .params

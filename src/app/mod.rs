@@ -38,6 +38,7 @@ pub struct App<S = ()> {
     pub(crate) built_router: MatchRouter,
     pub(crate) config: config::Config,
     pub(crate) shutdown_timeout: std::time::Duration,
+    dump_routes: bool,
 }
 
 impl Default for App {
@@ -57,6 +58,7 @@ impl App {
             built_router: MatchRouter::default(),
             config: config::Config::default(),
             shutdown_timeout: std::time::Duration::from_secs(10),
+            dump_routes: false,
         }
     }
 
@@ -70,6 +72,7 @@ impl App {
             built_router: self.built_router,
             config: self.config,
             shutdown_timeout: self.shutdown_timeout,
+            dump_routes: self.dump_routes,
         }
     }
 
@@ -83,6 +86,16 @@ impl App {
     /// Changes to the router after the server has started will not take effect.
     pub fn router(mut self, router: router::Router) -> Self {
         self.router = router;
+        self
+    }
+
+    /// Logs the complete route table at startup for debugging.
+    ///
+    /// When enabled, prints all registered routes with their HTTP methods,
+    /// paths, and handler chains. Useful for verifying route configuration
+    /// and debugging routing issues during development.
+    pub fn dump_routes(mut self, enable: bool) -> Self {
+        self.dump_routes = enable;
         self
     }
 
@@ -166,6 +179,10 @@ impl App {
     where
         A: net::ToSocketAddrs + std::fmt::Debug + 'static,
     {
+        if self.dump_routes {
+            tracing::info!("App Router: {:#?}", self.router);
+        }
+
         self.built_router = self.router.build()?;
 
         let middlewares: Vec<_> = {
@@ -250,6 +267,7 @@ impl Clone for App {
             built_router: MatchRouter::default(),
             config: self.config.clone(),
             shutdown_timeout: self.shutdown_timeout,
+            dump_routes: self.dump_routes,
         }
     }
 }

@@ -40,6 +40,11 @@ pub trait Handler<Ctx> {
     fn state(&self) -> &dyn std::any::Any {
         &()
     }
+
+    fn name(&self) -> &str {
+        let full = std::any::type_name::<Self>();
+        full.rsplit("::").next().unwrap_or(full)
+    }
 }
 
 impl<F: ?Sized, Fut, Ctx> Handler<Ctx> for F
@@ -71,11 +76,14 @@ impl<F> HandlerWrapper<F> {
     }
 }
 
-impl<F> Debug for HandlerWrapper<F> {
+impl<F: for<'a> Handler<&'a mut Ctx>> Debug for HandlerWrapper<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.handler_type)?;
+        match self.handler_type {
+            HandlerType::Middleware => write!(f, "{}({})", self.handler_type, self.f.name())?,
+            HandlerType::Method(_) => write!(f, "{}", self.handler_type)?,
+        }
         #[cfg(debug_assertions)]
-        write!(f, ": {}", self.location)?;
+        write!(f, " @ {}", self.location)?;
         Ok(())
     }
 }

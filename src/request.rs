@@ -5,10 +5,7 @@ use http::{HeaderMap, HeaderValue, Method, Uri, Version, header::AsHeaderName};
 use http_body_util::BodyExt;
 use hyper::body::Incoming as IncomingBody;
 use mime_guess::{Mime, mime};
-use serde::{
-    Deserialize,
-    de::{DeserializeOwned, value::BorrowedStrDeserializer},
-};
+use serde::{Deserialize, de::DeserializeOwned};
 use smol_str::SmolStr;
 
 use crate::{
@@ -67,12 +64,10 @@ impl Request {
             .params
             .get(key)
             .ok_or(ParamError::Missing(key.into()))?;
-        T::deserialize(BorrowedStrDeserializer::new(value.as_str())).map_err(move |e| {
-            ParamError::Invalid {
-                key: key.into(),
-                value: value.clone(),
-                source: e,
-            }
+        serde_plain::from_str(value.as_str()).map_err(|e| ParamError::Invalid {
+            key: key.into(),
+            value: value.clone(),
+            source: e,
         })
     }
 
@@ -292,7 +287,7 @@ pub enum ParamError {
         key: SmolStr,
         value: SmolStr,
         #[source]
-        source: serde::de::value::Error,
+        source: serde_plain::Error,
     },
 }
 

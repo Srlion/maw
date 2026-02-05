@@ -184,7 +184,7 @@ let app = App::new()
 ## WebSocket
 
 ```rust
-.ws("/ws", |mut ws| async move {
+.ws("/ws", async |mut ws| {
     while let Some(Ok(msg)) = ws.recv().await {
         if let WsMessage::Text(txt) = msg {
             ws.send(format!("echo: {txt}")).await.ok();

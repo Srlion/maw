@@ -66,7 +66,7 @@ impl SessionStore {
     }
 
     /// Check if a key exists in the session
-    pub fn contains(&self, key: &str) -> bool {
+    pub fn contains_key(&self, key: &str) -> bool {
         self.data.contains_key(key)
     }
 

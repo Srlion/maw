@@ -153,6 +153,12 @@ impl AnyMap<dyn CloneableAny> {
             .and_then(|b| b.into_any().downcast().ok().map(|b| *b))
     }
 
+    pub fn set<T: Clone + Send + Sync + 'static>(&mut self, key: impl Into<String>, val: T) {
+        self.map
+            .get_or_insert_with(Box::default)
+            .insert(key.into(), Box::new(val));
+    }
+
     pub fn get_or_insert_with<T>(&mut self, key: impl Into<String>, f: impl FnOnce() -> T) -> &mut T
     where
         T: Clone + Send + Sync + 'static,
@@ -320,6 +326,16 @@ mod serializable_any {
                 .get_or_insert_with(Box::default)
                 .insert(key.into(), Box::new(val))
                 .and_then(|b| b.into_any().downcast().ok().map(|b| *b))
+        }
+
+        pub fn set<T: serde::Serialize + Clone + Send + Sync + 'static>(
+            &mut self,
+            key: impl Into<String>,
+            val: T,
+        ) {
+            self.map
+                .get_or_insert_with(Box::default)
+                .insert(key.into(), Box::new(val));
         }
 
         pub fn get_or_insert_with<T>(

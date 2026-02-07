@@ -89,7 +89,6 @@ pub mod prelude {
 
 pub use crate::into_response::IntoResponse;
 pub use crate::response::{BoxError, HttpBody};
-pub use app::config::Config;
 #[cfg(feature = "middleware-cookie")]
 pub use postcard;
 pub use serde_json;

@@ -37,7 +37,7 @@ impl Request {
         peer_addr: std::net::SocketAddr,
     ) -> Self {
         let (parts, body) = request.into_parts();
-        let body_limit = app.config.body_limit;
+        let body_limit = app.body_limit;
         Request {
             app,
             parts,
@@ -266,8 +266,8 @@ impl Request {
 
     #[inline]
     pub fn ip(&self) -> String {
-        if !self.app.config.proxy_header.is_empty() {
-            return self.extract_ip_from_header(&self.app.config.proxy_header);
+        if let Some(ref header_name) = self.app.proxy_header {
+            return self.extract_ip_from_header(header_name);
         }
         self.ip.to_string()
     }

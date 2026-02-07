@@ -11,8 +11,6 @@ use smol_str::SmolStr;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
-pub(crate) mod config;
-
 #[cfg(feature = "minijinja")]
 mod jinja;
 #[cfg(feature = "minijinja")]
@@ -36,9 +34,19 @@ pub struct App<S = ()> {
     pub jinja: Jinja,
     pub(crate) locals: RwLock<AnyMap<dyn SerializableAny>>,
     pub(crate) built_router: MatchRouter,
-    pub(crate) config: config::Config,
     pub(crate) shutdown_timeout: std::time::Duration,
     dump_routes: bool,
+    /// Max body size that the server accepts.
+    ///
+    /// Default: 4MB
+    pub(crate) body_limit: usize,
+    /// ProxyHeader will enable c.req.ip() to return the value of the given header key
+    /// By default c.req.ip() will return the Remote IP from the TCP connection
+    /// This property can be useful if you are behind a load balancer: X-Forwarded-*
+    /// NOTE: headers are easily spoofed and the detected IP addresses are unreliable.
+    ///
+    /// Default: None
+    pub(crate) proxy_header: Option<String>,
 }
 
 impl Default for App {
@@ -56,9 +64,10 @@ impl App {
             jinja: Jinja::default(),
             locals: RwLock::new(AnyMap::new()),
             built_router: MatchRouter::default(),
-            config: config::Config::default(),
             shutdown_timeout: std::time::Duration::from_secs(10),
             dump_routes: false,
+            body_limit: 4 * 1024 * 1024,
+            proxy_header: None,
         }
     }
 
@@ -70,14 +79,29 @@ impl App {
             jinja: self.jinja,
             locals: self.locals,
             built_router: self.built_router,
-            config: self.config,
             shutdown_timeout: self.shutdown_timeout,
             dump_routes: self.dump_routes,
+            body_limit: self.body_limit,
+            proxy_header: self.proxy_header,
         }
     }
 
-    pub fn config(mut self, config: config::Config) -> Self {
-        self.config = config;
+    /// Set the maximum body size that the server accepts
+    ///
+    /// Default: 4MB
+    pub fn body_limit(mut self, limit: usize) -> Self {
+        self.body_limit = limit;
+        self
+    }
+
+    /// ProxyHeader will enable c.req.ip() to return the value of the given header key
+    /// By default c.req.ip() will return the Remote IP from the TCP connection
+    /// This property can be useful if you are behind a load balancer: X-Forwarded-*
+    /// NOTE: headers are easily spoofed and the detected IP addresses are unreliable.
+    ///
+    /// Default: None (disabled)
+    pub fn proxy_header(mut self, header: impl Into<String>) -> Self {
+        self.proxy_header = Some(header.into());
         self
     }
 
@@ -265,9 +289,10 @@ impl Clone for App {
             jinja: self.jinja.clone(),
             locals: RwLock::new(self.locals.read().unwrap().clone()),
             built_router: MatchRouter::default(),
-            config: self.config.clone(),
             shutdown_timeout: self.shutdown_timeout,
             dump_routes: self.dump_routes,
+            body_limit: self.body_limit,
+            proxy_header: self.proxy_header.clone(),
         }
     }
 }

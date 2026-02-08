@@ -149,7 +149,7 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn body_bytes(&mut self, limit: Option<usize>) -> Result<&Bytes, BodyError> {
+    pub async fn bytes(&mut self, limit: Option<usize>) -> Result<&Bytes, BodyError> {
         if let Some(ref bytes) = self.cached_body {
             return Ok(bytes);
         }
@@ -167,37 +167,37 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn body_text(&mut self, limit: Option<usize>) -> Result<&str, BodyError> {
-        let bytes = self.body_bytes(limit).await?;
+    pub async fn text(&mut self, limit: Option<usize>) -> Result<&str, BodyError> {
+        let bytes = self.bytes(limit).await?;
         let s = std::str::from_utf8(bytes)?;
         Ok(s)
     }
 
     #[inline]
-    pub async fn parse_json<T: DeserializeOwned>(
+    pub async fn json<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, ParseError> {
-        let bytes = self.body_bytes(limit).await?;
+        let bytes = self.bytes(limit).await?;
         Ok(serde_json::from_slice(bytes)?)
     }
 
     #[inline]
-    pub async fn parse_form<T: DeserializeOwned>(
+    pub async fn form<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, ParseError> {
-        let bytes = self.body_bytes(limit).await?;
+        let bytes = self.bytes(limit).await?;
         Ok(serde_urlencoded::from_bytes(bytes)?)
     }
 
     #[cfg(feature = "xml")]
     #[inline]
-    pub async fn parse_xml<T: DeserializeOwned>(
+    pub async fn xml<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, ParseError> {
-        let bytes = self.body_bytes(limit).await?;
+        let bytes = self.bytes(limit).await?;
         let str = std::str::from_utf8(bytes)?;
         Ok(quick_xml::de::from_str(str)?)
     }
@@ -213,25 +213,25 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn parse_body<T: DeserializeOwned>(
+    pub async fn parse<T: DeserializeOwned>(
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, ParseError> {
         match self.content_type() {
             Some(mime) => {
                 if mime.suffix() == Some(mime::JSON) || mime.subtype() == mime::JSON {
-                    self.parse_json(limit).await
+                    self.json(limit).await
                 } else if mime.type_() == mime::APPLICATION {
                     match mime.subtype().as_str() {
-                        "x-www-form-urlencoded" => self.parse_form(limit).await,
+                        "x-www-form-urlencoded" => self.form(limit).await,
                         #[cfg(feature = "xml")]
-                        "xml" => self.parse_xml(limit).await,
+                        "xml" => self.xml(limit).await,
                         _ => Err(BodyError::UnsupportedMediaType.into()),
                     }
                 } else if mime.type_() == mime::TEXT && mime.subtype() == mime::XML {
                     #[cfg(feature = "xml")]
                     {
-                        self.parse_xml(limit).await
+                        self.xml(limit).await
                     }
                     #[cfg(not(feature = "xml"))]
                     {
@@ -273,20 +273,14 @@ impl Request {
     }
 
     #[inline]
-    pub fn is_from_local(&self) -> bool {
+    pub fn is_local(&self) -> bool {
         self.ip.ip().is_loopback()
     }
 
     #[inline]
-    pub fn query(&self) -> HashMap<String, String> {
-        let query_string = self.parts.uri.query().unwrap_or("");
-        serde_urlencoded::from_str(query_string).unwrap_or_default()
-    }
-
-    #[inline]
-    pub fn query_parse<T: DeserializeOwned>(&self) -> Result<T, QueryError> {
-        let query_string = self.parts.uri.query().unwrap_or("");
-        Ok(serde_urlencoded::from_str(query_string)?)
+    pub fn query<T: DeserializeOwned>(&self) -> Result<T, QueryError> {
+        let qs = self.parts.uri.query().unwrap_or("");
+        Ok(serde_urlencoded::from_str(qs)?)
     }
 }
 

@@ -140,7 +140,9 @@ impl Response {
         self
     }
 
-    /// Sets the status code and the correct status message in the body if the response body is **empty**.
+    /// Sets the status code and sends the status text (e.g. "Not Found") as the body.
+    ///
+    /// **Only** writes the body if it is currently empty.
     pub fn send_status(&mut self, status: StatusCode) -> &mut Self {
         self.status(status);
 

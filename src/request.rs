@@ -149,11 +149,11 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn bytes(&mut self, limit: Option<usize>) -> Result<&Bytes, BodyError> {
+    pub async fn bytes(&mut self) -> Result<&Bytes, BodyError> {
         if let Some(ref bytes) = self.cached_body {
             return Ok(bytes);
         }
-        let limit = limit.unwrap_or_else(|| self.body_limit);
+        let limit = self.body_limit;
         let limited = http_body_util::Limited::new(&mut self.body, limit);
         let collected = limited.collect().await.map_err(BodyError::Collect)?;
         let bytes = collected.to_bytes();
@@ -167,37 +167,28 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn text(&mut self, limit: Option<usize>) -> Result<&str, BodyError> {
-        let bytes = self.bytes(limit).await?;
+    pub async fn text(&mut self) -> Result<&str, BodyError> {
+        let bytes = self.bytes().await?;
         let s = std::str::from_utf8(bytes)?;
         Ok(s)
     }
 
     #[inline]
-    pub async fn json<T: DeserializeOwned>(
-        &mut self,
-        limit: Option<usize>,
-    ) -> Result<T, ParseError> {
-        let bytes = self.bytes(limit).await?;
+    pub async fn json<T: DeserializeOwned>(&mut self) -> Result<T, ParseError> {
+        let bytes = self.bytes().await?;
         Ok(serde_json::from_slice(bytes)?)
     }
 
     #[inline]
-    pub async fn form<T: DeserializeOwned>(
-        &mut self,
-        limit: Option<usize>,
-    ) -> Result<T, ParseError> {
-        let bytes = self.bytes(limit).await?;
+    pub async fn form<T: DeserializeOwned>(&mut self) -> Result<T, ParseError> {
+        let bytes = self.bytes().await?;
         Ok(serde_urlencoded::from_bytes(bytes)?)
     }
 
     #[cfg(feature = "xml")]
     #[inline]
-    pub async fn xml<T: DeserializeOwned>(
-        &mut self,
-        limit: Option<usize>,
-    ) -> Result<T, ParseError> {
-        let bytes = self.bytes(limit).await?;
+    pub async fn xml<T: DeserializeOwned>(&mut self) -> Result<T, ParseError> {
+        let bytes = self.bytes().await?;
         let str = std::str::from_utf8(bytes)?;
         Ok(quick_xml::de::from_str(str)?)
     }
@@ -213,25 +204,22 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn parse<T: DeserializeOwned>(
-        &mut self,
-        limit: Option<usize>,
-    ) -> Result<T, ParseError> {
+    pub async fn parse<T: DeserializeOwned>(&mut self) -> Result<T, ParseError> {
         match self.content_type() {
             Some(mime) => {
                 if mime.suffix() == Some(mime::JSON) || mime.subtype() == mime::JSON {
-                    self.json(limit).await
+                    self.json().await
                 } else if mime.type_() == mime::APPLICATION {
                     match mime.subtype().as_str() {
-                        "x-www-form-urlencoded" => self.form(limit).await,
+                        "x-www-form-urlencoded" => self.form().await,
                         #[cfg(feature = "xml")]
-                        "xml" => self.xml(limit).await,
+                        "xml" => self.xml().await,
                         _ => Err(BodyError::UnsupportedMediaType.into()),
                     }
                 } else if mime.type_() == mime::TEXT && mime.subtype() == mime::XML {
                     #[cfg(feature = "xml")]
                     {
-                        self.xml(limit).await
+                        self.xml().await
                     }
                     #[cfg(not(feature = "xml"))]
                     {

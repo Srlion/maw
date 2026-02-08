@@ -20,7 +20,7 @@ async fn main() -> Result<(), MawError> {
                     age: u8,
                 }
 
-                let data = c.req.parse::<Data>(None).await?;
+                let data = c.req.parse::<Data>().await?;
                 c.res.json(format!("Got: {}, {}", data.name, data.age));
 
                 Ok(())

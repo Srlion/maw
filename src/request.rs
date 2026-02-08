@@ -20,7 +20,7 @@ pub struct Request {
     pub(crate) body: IncomingBody,
     pub params: HashMap<SmolStr, SmolStr>,
     pub locals: AnyMap<dyn CloneableAny>,
-    pub(crate) body_bytes: Option<Bytes>,
+    pub(crate) cached_body: Option<Bytes>,
     pub(crate) ip: std::net::SocketAddr,
     /// Max body size that the server accepts.
     ///
@@ -44,7 +44,7 @@ impl Request {
             body,
             params,
             locals: AnyMap::new(),
-            body_bytes: None,
+            cached_body: None,
             ip: peer_addr,
             body_limit,
         }
@@ -150,15 +150,15 @@ impl Request {
     /// Default limit is 4MB.
     #[inline]
     pub async fn body_raw(&mut self, limit: Option<usize>) -> Result<&Bytes, BodyError> {
-        if let Some(ref bytes) = self.body_bytes {
+        if let Some(ref bytes) = self.cached_body {
             return Ok(bytes);
         }
         let limit = limit.unwrap_or_else(|| self.body_limit);
         let limited = http_body_util::Limited::new(&mut self.body, limit);
         let collected = limited.collect().await.map_err(BodyError::Collect)?;
         let bytes = collected.to_bytes();
-        self.body_bytes = Some(bytes);
-        Ok(self.body_bytes.as_ref().unwrap())
+        self.cached_body = Some(bytes);
+        Ok(self.cached_body.as_ref().unwrap())
     }
 
     /// Get body as text.

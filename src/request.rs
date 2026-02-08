@@ -149,7 +149,7 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn body_raw(&mut self, limit: Option<usize>) -> Result<&Bytes, BodyError> {
+    pub async fn body_bytes(&mut self, limit: Option<usize>) -> Result<&Bytes, BodyError> {
         if let Some(ref bytes) = self.cached_body {
             return Ok(bytes);
         }
@@ -168,7 +168,7 @@ impl Request {
     /// Default limit is 4MB.
     #[inline]
     pub async fn body_text(&mut self, limit: Option<usize>) -> Result<&str, BodyError> {
-        let bytes = self.body_raw(limit).await?;
+        let bytes = self.body_bytes(limit).await?;
         let s = std::str::from_utf8(bytes)?;
         Ok(s)
     }
@@ -178,7 +178,7 @@ impl Request {
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, ParseError> {
-        let bytes = self.body_raw(limit).await?;
+        let bytes = self.body_bytes(limit).await?;
         Ok(serde_json::from_slice(bytes)?)
     }
 
@@ -187,7 +187,7 @@ impl Request {
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, ParseError> {
-        let bytes = self.body_raw(limit).await?;
+        let bytes = self.body_bytes(limit).await?;
         Ok(serde_urlencoded::from_bytes(bytes)?)
     }
 
@@ -197,7 +197,7 @@ impl Request {
         &mut self,
         limit: Option<usize>,
     ) -> Result<T, ParseError> {
-        let bytes = self.body_raw(limit).await?;
+        let bytes = self.body_bytes(limit).await?;
         let str = std::str::from_utf8(bytes)?;
         Ok(quick_xml::de::from_str(str)?)
     }

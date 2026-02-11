@@ -149,7 +149,7 @@ impl Request {
     ///
     /// Default limit is 4MB.
     #[inline]
-    pub async fn bytes(&mut self) -> Result<&Bytes, BodyError> {
+    pub async fn body(&mut self) -> Result<&Bytes, BodyError> {
         if let Some(ref bytes) = self.cached_body {
             return Ok(bytes);
         }
@@ -168,27 +168,27 @@ impl Request {
     /// Default limit is 4MB.
     #[inline]
     pub async fn text(&mut self) -> Result<&str, BodyError> {
-        let bytes = self.bytes().await?;
+        let bytes = self.body().await?;
         let s = std::str::from_utf8(bytes)?;
         Ok(s)
     }
 
     #[inline]
     pub async fn json<T: DeserializeOwned>(&mut self) -> Result<T, ParseError> {
-        let bytes = self.bytes().await?;
+        let bytes = self.body().await?;
         Ok(serde_json::from_slice(bytes)?)
     }
 
     #[inline]
     pub async fn form<T: DeserializeOwned>(&mut self) -> Result<T, ParseError> {
-        let bytes = self.bytes().await?;
+        let bytes = self.body().await?;
         Ok(serde_urlencoded::from_bytes(bytes)?)
     }
 
     #[cfg(feature = "xml")]
     #[inline]
     pub async fn xml<T: DeserializeOwned>(&mut self) -> Result<T, ParseError> {
-        let bytes = self.bytes().await?;
+        let bytes = self.body().await?;
         let str = std::str::from_utf8(bytes)?;
         Ok(quick_xml::de::from_str(str)?)
     }

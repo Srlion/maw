@@ -1,12 +1,20 @@
+use crate::ctx::Ctx;
+
 use super::SessionStore;
 
 pub trait SessionStorage: Send + Sync {
     /// If true, entire session stored in cookie (no external storage)
     const INLINE: bool = false;
 
-    fn load(&self, id: &str) -> impl std::future::Future<Output = Option<SessionStore>> + Send;
+    fn load(
+        &self,
+        c: &mut Ctx,
+        id: &str,
+    ) -> impl std::future::Future<Output = Option<SessionStore>> + Send;
+
     fn save(
         &self,
+        c: &mut Ctx,
         id: &str,
         session: &SessionStore,
     ) -> impl std::future::Future<Output = ()> + Send;

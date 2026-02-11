@@ -19,13 +19,13 @@ impl RedisStorage {
 }
 
 impl SessionStorage for RedisStorage {
-    async fn load(&self, id: &str) -> Option<SessionStore> {
+    async fn load(&self, _: &mut Ctx, id: &str) -> Option<SessionStore> {
         let mut conn = self.client.get_multiplexed_async_connection().await.ok()?;
         let data: Vec<u8> = conn.get(["session:", id].concat()).await.ok()?;
         postcard::from_bytes(&data).ok()
     }
 
-    async fn save(&self, id: &str, session: &SessionStore) {
+    async fn save(&self, _: &mut Ctx, id: &str, session: &SessionStore) {
         let Ok(mut conn) = self.client.get_multiplexed_async_connection().await else {
             return;
         };

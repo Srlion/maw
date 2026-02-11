@@ -180,7 +180,7 @@ impl<S: SessionStorage> Handler<&mut Ctx> for SessionMiddleware<S> {
                 .ok();
 
             c.session = match &sid {
-                Some(id) => self.storage.load(id).await.unwrap_or_default(),
+                Some(id) => self.storage.load(c, id).await.unwrap_or_default(),
                 None => SessionStore::default(),
             };
 
@@ -189,7 +189,7 @@ impl<S: SessionStorage> Handler<&mut Ctx> for SessionMiddleware<S> {
             if c.session.is_modified() {
                 let session = std::mem::take(&mut c.session);
                 let id = sid.unwrap_or_else(|| self.storage.generate_id());
-                self.storage.save(&id, &session).await;
+                self.storage.save(c, &id, &session).await;
                 c.cookies.set_typed(
                     &self.cookie_name,
                     &id,

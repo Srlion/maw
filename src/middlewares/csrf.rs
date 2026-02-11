@@ -136,7 +136,7 @@ impl Handler<&mut Ctx> for CsrfMiddleware {
         };
 
         if !is_safe {
-            let submitted_token = c.req.get(CSRF_HEADER);
+            let submitted_token = c.req.header(CSRF_HEADER);
             let is_valid = submitted_token
                 .as_ref()
                 .map(|submitted| {

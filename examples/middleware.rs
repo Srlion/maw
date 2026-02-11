@@ -3,7 +3,7 @@ use std::sync::Arc;
 use maw::prelude::*;
 
 async fn auth(c: &mut Ctx) {
-    if c.req.get("authorization").is_none() {
+    if c.req.header("authorization").is_none() {
         c.res.send_status(StatusCode::UNAUTHORIZED);
     } else {
         c.next().await;
@@ -36,7 +36,7 @@ async fn main() -> Result<(), MawError> {
                 "/protected2",
                 (
                     async |c: &mut Ctx| {
-                        if c.req.get("authorization").is_none() {
+                        if c.req.header("authorization").is_none() {
                             c.res.send_status(StatusCode::UNAUTHORIZED);
                         } else {
                             c.next().await;

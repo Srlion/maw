@@ -117,7 +117,7 @@ impl Request {
 
     /// Returns the specified Header value as a &str.
     #[inline]
-    pub fn get<K>(&self, key: K) -> Option<&str>
+    pub fn header<K>(&self, key: K) -> Option<&str>
     where
         K: AsHeaderName,
     {
@@ -249,7 +249,7 @@ impl Request {
 
     #[inline]
     fn extract_ip_from_header(&self, header_name: &str) -> String {
-        self.get(header_name).unwrap_or_default().to_string()
+        self.header(header_name).unwrap_or_default().to_string()
     }
 
     #[inline]

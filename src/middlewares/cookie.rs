@@ -3,7 +3,7 @@ pub use cookie::{Cookie, CookieJar, Key, SameSite};
 use serde::{Serialize, de::DeserializeOwned};
 use smol_str::SmolStr;
 
-use crate::{handler::Handler, ctx::Ctx, prelude::StatusError};
+use crate::{ctx::Ctx, handler::Handler, prelude::StatusError};
 
 #[derive(Clone, Debug)]
 pub enum CookieType {
@@ -197,7 +197,7 @@ impl Handler<&mut Ctx> for CookieMiddleware {
         // Initialize cookies from request
         {
             let mut jar = CookieJar::new();
-            if let Some(cookie_header) = c.req.get(http::header::COOKIE) {
+            if let Some(cookie_header) = c.req.header(http::header::COOKIE) {
                 for cookie_str in cookie_header.split(';') {
                     if let Ok(cookie) = Cookie::parse(cookie_str.trim().to_owned()) {
                         jar.add_original(cookie);

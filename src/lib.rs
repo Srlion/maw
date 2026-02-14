@@ -93,3 +93,5 @@ pub use crate::response::{BoxError, HttpBody};
 pub use postcard;
 pub use serde_json;
 pub use tokio_util::sync::CancellationToken;
+#[cfg(feature = "websocket")]
+pub use websocket::WsUpgradeError;

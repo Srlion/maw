@@ -73,7 +73,6 @@ rand = { version = "0.9.2", default-features = false, features = [
   "thread_rng",
 ], optional = true }
 rust-embed = { version = "8.11.0", features = [
-  "debug-embed",
   "interpolate-folder-path",
 ], optional = true }
 serde = { version = "1.0.228", features = [] }
@@ -112,5 +111,6 @@ middleware-logging = []
 middleware-session = ["dep:rand", "middleware-cookie", "serde/derive"]
 minijinja = ["dep:erased-serde", "dep:minijinja"]
 static_files = ["dep:httpdate", "dep:rust-embed"]
+static_files_debug_embed = ["rust-embed?/debug-embed"]
 websocket = ["dep:hyper-tungstenite"]
 xml = ["dep:quick-xml"]

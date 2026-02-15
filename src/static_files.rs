@@ -13,6 +13,7 @@ pub struct StaticFiles<E> {
     _marker: PhantomData<E>,
     pub(crate) index: &'static str,
     cache_control: Option<String>,
+    fallback_to: Option<&'static str>,
 }
 
 impl<E: RustEmbed> StaticFiles<E> {
@@ -21,6 +22,7 @@ impl<E: RustEmbed> StaticFiles<E> {
             _marker: PhantomData,
             index: "index.html",
             cache_control: None,
+            fallback_to: None,
         }
     }
 
@@ -37,6 +39,18 @@ impl<E: RustEmbed> StaticFiles<E> {
         };
         self
     }
+
+    /// Serve a specific embedded file when no matching path is found,
+    /// going through the same last-modified/cache-control logic as normal files.
+    ///
+    /// ```rust
+    /// // SPA: let the client-side router handle all unknown paths
+    /// StaticFiles::new(Assets).fallback_to("index.html")
+    /// ```
+    pub fn fallback_to(mut self, file: &'static str) -> Self {
+        self.fallback_to = Some(file);
+        self
+    }
 }
 
 impl<E> Clone for StaticFiles<E> {
@@ -45,6 +59,7 @@ impl<E> Clone for StaticFiles<E> {
             _marker: PhantomData,
             index: self.index,
             cache_control: self.cache_control.clone(),
+            fallback_to: self.fallback_to,
         }
     }
 }
@@ -68,9 +83,15 @@ impl<E: RustEmbed + Sync> Handler<&mut Ctx> for StaticFiles<E> {
             }
         };
 
-        let Some(file) = file else {
-            c.res.send_status(StatusCode::NOT_FOUND);
-            return;
+        let (file, mime_path) = match file {
+            Some(f) => (f, mime_path),
+            None => match self.fallback_to.and_then(|p| E::get(p).map(|f| (f, p))) {
+                Some((f, p)) => (f, p.to_string()),
+                None => {
+                    c.res.send_status(StatusCode::NOT_FOUND);
+                    return;
+                }
+            },
         };
 
         if let Some(last_modified) = file.metadata.last_modified() {

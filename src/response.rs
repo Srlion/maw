@@ -322,6 +322,38 @@ impl Response {
         self.render_template(template, final_ctx)
     }
 
+    #[cfg(feature = "minijinja")]
+    #[inline]
+    pub fn render_str(&mut self, source: &str) {
+        self.render_str_template(source, self.get_render_ctx());
+    }
+
+    #[cfg(feature = "minijinja")]
+    #[inline]
+    pub fn render_str_with(&mut self, source: &str, value: minijinja::Value) {
+        self.render_str_template(
+            source,
+            minijinja::context! {
+                ..self.get_render_ctx(),
+                ..value,
+            },
+        );
+    }
+
+    #[cfg(feature = "minijinja")]
+    fn render_str_template(&mut self, source: &str, c: minijinja::Value) {
+        match self.app.jinja.render_str(source, &c) {
+            Ok(rendered) => self
+                .status(StatusCode::OK)
+                .content_type("text/html; charset=utf-8")
+                .send(rendered),
+            Err(e) => {
+                tracing::warn!("failed to render inline template: {e}");
+                self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+
     /// Redirects to the specified location with an optional status code.
     /// If no status is provided, defaults to 302 Found.
     pub fn redirect(&mut self, location: impl AsRef<str>, status: Option<StatusCode>) {

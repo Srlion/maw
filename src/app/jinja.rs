@@ -55,6 +55,21 @@ impl Jinja {
         self.0.get_template(name)?.render(&ctx)
     }
 
+    pub fn render_str(
+        &self,
+        source: &str,
+        ctx: impl serde::Serialize,
+    ) -> Result<String, minijinja::Error> {
+        #[cfg(debug_assertions)]
+        {
+            let env = self.0.lock().unwrap();
+            env.render_str(source, &ctx)
+        }
+
+        #[cfg(not(debug_assertions))]
+        self.0.render_str(source, &ctx)
+    }
+
     #[cfg(debug_assertions)]
     pub fn with(&mut self, f: impl FnOnce(&mut Environment<'static>)) {
         f(&mut self.0.lock().unwrap());

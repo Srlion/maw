@@ -281,77 +281,49 @@ impl Response {
     }
 
     #[cfg(feature = "minijinja")]
-    #[inline]
-    fn get_rendered_template(
-        &self,
-        template: &str,
-        c: minijinja::Value,
-    ) -> Result<String, minijinja::Error> {
-        self.app.jinja.render(template, &c).map_err(|e| {
-            tracing::warn!("failed to render template {template}: {e}");
-            e
-        })
-    }
-
-    #[cfg(feature = "minijinja")]
-    fn render_template(&mut self, template: &str, c: minijinja::Value) {
-        let Ok(rendered) = self.get_rendered_template(template, c) else {
-            self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
-            return;
-        };
-
-        self.status(StatusCode::OK)
-            .content_type("text/html; charset=utf-8")
-            .send(rendered);
+    fn send_rendered(&mut self, result: Result<String, minijinja::Error>, label: &str) {
+        match result {
+            Ok(rendered) => self
+                .status(StatusCode::OK)
+                .content_type("text/html; charset=utf-8")
+                .send(rendered),
+            Err(e) => {
+                tracing::warn!("failed to render {label}: {e}");
+                self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 
     #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render(&mut self, template: &str) {
         let ctx = self.get_render_ctx();
-        self.render_template(template, ctx)
+        let result = self.app.jinja.render(template, &ctx);
+        self.send_rendered(result, template);
     }
 
     #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render_with(&mut self, template: &str, value: minijinja::Value) {
-        let final_ctx = minijinja::context! {
-            ..self.get_render_ctx(),
-            ..value,
-        };
-        self.render_template(template, final_ctx)
+        let ctx = minijinja::context! { ..self.get_render_ctx(), ..value };
+        let result = self.app.jinja.render(template, &ctx);
+        self.send_rendered(result, template);
     }
 
     #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render_str(&mut self, source: &str) {
-        self.render_str_template(source, self.get_render_ctx());
+        let ctx = self.get_render_ctx();
+        let result = self.app.jinja.render_str(source, &ctx);
+        self.send_rendered(result, "inline template");
     }
 
     #[cfg(feature = "minijinja")]
     #[inline]
     pub fn render_str_with(&mut self, source: &str, value: minijinja::Value) {
-        self.render_str_template(
-            source,
-            minijinja::context! {
-                ..self.get_render_ctx(),
-                ..value,
-            },
-        );
-    }
-
-    #[cfg(feature = "minijinja")]
-    fn render_str_template(&mut self, source: &str, c: minijinja::Value) {
-        match self.app.jinja.render_str(source, &c) {
-            Ok(rendered) => self
-                .status(StatusCode::OK)
-                .content_type("text/html; charset=utf-8")
-                .send(rendered),
-            Err(e) => {
-                tracing::warn!("failed to render inline template: {e}");
-                self.send_status(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        }
+        let ctx = minijinja::context! { ..self.get_render_ctx(), ..value };
+        let result = self.app.jinja.render_str(source, &ctx);
+        self.send_rendered(result, "inline template");
     }
 
     /// Redirects to the specified location with an optional status code.

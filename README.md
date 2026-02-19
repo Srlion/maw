@@ -193,6 +193,22 @@ let app = App::new()
 })
 ```
 
+## Server-Sent Events (SSE)
+
+```rust
+use bytes::Bytes;
+use futures_util::stream;
+
+.get("/events", async |c: &mut Ctx| {
+    let stream = stream::iter([
+        Ok::<Bytes, std::convert::Infallible>(Bytes::from("data: hello\n\n")),
+    ]);
+
+    // Sets SSE headers and auto-closes when app shutdown begins.
+    c.res.sse(stream);
+})
+```
+
 ## License
 
 MIT

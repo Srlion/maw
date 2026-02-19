@@ -237,6 +237,30 @@ impl Response {
         *self.inner.body_mut() = HttpBody::stream_frames(mapped);
     }
 
+    /// Send a server-sent events (SSE) stream.
+    ///
+    /// Sets standard SSE headers and automatically closes the stream when
+    /// application shutdown is triggered.
+    pub fn sse<S, E>(&mut self, stream: S)
+    where
+        S: Stream<Item = Result<Bytes, E>> + Send + Sync + 'static,
+        E: Into<BoxError> + 'static,
+    {
+        self.set([
+            ("Content-Type", "text/event-stream"),
+            ("Cache-Control", "no-cache"),
+            ("X-Accel-Buffering", "no"), // Disable buffering for nginx
+        ]);
+
+        let shutdown = self.app.shutdown_token().cancelled_owned();
+
+        let stream = stream
+            .map(|result| result.map_err(Into::into))
+            .take_until(shutdown);
+
+        *self.inner.body_mut() = HttpBody::stream(stream);
+    }
+
     #[inline]
     pub fn content_type<V>(&mut self, value: V) -> &mut Self
     where

@@ -34,6 +34,7 @@ pub struct App<S = ()> {
     pub jinja: Jinja,
     pub(crate) locals: RwLock<AnyMap<dyn SerializableAny>>,
     pub(crate) built_router: MatchRouter,
+    pub(crate) shutdown: CancellationToken,
     pub(crate) shutdown_timeout: std::time::Duration,
     dump_routes: bool,
     /// Max body size that the server accepts.
@@ -64,6 +65,7 @@ impl App {
             jinja: Jinja::default(),
             locals: RwLock::new(AnyMap::new()),
             built_router: MatchRouter::default(),
+            shutdown: CancellationToken::new(),
             shutdown_timeout: std::time::Duration::from_secs(10),
             dump_routes: false,
             body_limit: 4 * 1024 * 1024,
@@ -79,6 +81,7 @@ impl App {
             jinja: self.jinja,
             locals: self.locals,
             built_router: self.built_router,
+            shutdown: self.shutdown,
             shutdown_timeout: self.shutdown_timeout,
             dump_routes: self.dump_routes,
             body_limit: self.body_limit,
@@ -130,6 +133,14 @@ impl App {
     pub fn shutdown_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.shutdown_timeout = timeout;
         self
+    }
+
+    /// Returns a clone of the server shutdown token.
+    ///
+    /// Long-lived tasks like SSE streams can use this to stop immediately
+    /// when application shutdown is triggered.
+    pub fn shutdown_token(&self) -> CancellationToken {
+        self.shutdown.clone()
     }
 
     /// Provides access to the application locals.
@@ -208,6 +219,8 @@ impl App {
         }
 
         self.built_router = self.router.build()?;
+
+        self.shutdown = shutdown.clone();
 
         let middlewares: Vec<_> = {
             let mut called = HashSet::new();
@@ -289,6 +302,7 @@ impl Clone for App {
             jinja: self.jinja.clone(),
             locals: RwLock::new(self.locals.read().unwrap().clone()),
             built_router: MatchRouter::default(),
+            shutdown: self.shutdown.clone(),
             shutdown_timeout: self.shutdown_timeout,
             dump_routes: self.dump_routes,
             body_limit: self.body_limit,

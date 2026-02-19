@@ -164,13 +164,22 @@ impl Response {
         self.inner.headers_mut()
     }
 
-    /// Sets multiple headers at once. Accepts:
-    /// - A single tuple: `res.set(("Content-Type", "text/plain"))?`
-    /// - An array of tuples: `res.set([("Content-Type", "text/plain"), ("ETag", "123")])?`
-    /// - A Vec of tuples: `res.set(vec![...])?`
-    /// - A HashMap: `res.set(hashmap)?`
+    /// Adds one or more HTTP headers.
+    ///
+    /// This method is flexible about input types. You can pass:
+    /// - a single `(name, value)` tuple:
+    ///   `res.header(("Content-Type", "text/plain"))`
+    /// - an array of tuples:
+    ///   `res.header([("Content-Type", "text/plain"), ("ETag", "123")])`
+    /// - a `Vec` of tuples:
+    ///   `res.header(vec![("Content-Type", "text/plain")])`
+    /// - a `HashMap` of header name/value pairs:
+    ///   `res.header(hashmap)`
+    ///
+    /// If converting the input into headers fails, the error is logged and the
+    /// response is returned unchanged.
     #[inline]
-    pub fn set<H>(&mut self, headers: H) -> &mut Self
+    pub fn header<H>(&mut self, headers: H) -> &mut Self
     where
         H: SetIntoHeaders,
     {
@@ -246,7 +255,7 @@ impl Response {
         S: Stream<Item = Result<Bytes, E>> + Send + Sync + 'static,
         E: Into<BoxError> + 'static,
     {
-        self.set([
+        self.header([
             ("Content-Type", "text/event-stream"),
             ("Cache-Control", "no-cache"),
             ("X-Accel-Buffering", "no"), // Disable buffering for nginx
@@ -267,7 +276,7 @@ impl Response {
         V: TryInto<HeaderValue>,
         Error: From<V::Error>,
     {
-        self.set((header::CONTENT_TYPE, value))
+        self.header((header::CONTENT_TYPE, value))
     }
 
     #[inline]
@@ -354,7 +363,7 @@ impl Response {
     /// If no status is provided, defaults to 302 Found.
     pub fn redirect(&mut self, location: impl AsRef<str>, status: Option<StatusCode>) {
         // Set the Location header
-        self.set((header::LOCATION, location.as_ref()));
+        self.header((header::LOCATION, location.as_ref()));
 
         // Set status code (default to 302 Found)
         let status_code = status.unwrap_or(StatusCode::FOUND);

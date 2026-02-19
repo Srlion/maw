@@ -96,7 +96,7 @@ impl<E: RustEmbed + Sync> Handler<&mut Ctx> for StaticFiles<E> {
 
         if let Some(last_modified) = file.metadata.last_modified() {
             let modified = UNIX_EPOCH + Duration::from_secs(last_modified);
-            c.res.set(("Last-Modified", fmt_http_date(modified)));
+            c.res.header(("Last-Modified", fmt_http_date(modified)));
 
             if let Some(ims) = c.req.headers().get("If-Modified-Since") {
                 if let Ok(ims_str) = ims.to_str() {
@@ -111,10 +111,10 @@ impl<E: RustEmbed + Sync> Handler<&mut Ctx> for StaticFiles<E> {
         }
 
         let mime = mime_guess::from_path(&mime_path).first_or_octet_stream();
-        c.res.set(("Content-Type", mime.as_ref()));
+        c.res.header(("Content-Type", mime.as_ref()));
 
         if let Some(cc) = &self.cache_control {
-            c.res.set(("Cache-Control", cc.as_str()));
+            c.res.header(("Cache-Control", cc.as_str()));
         }
 
         c.res.send(file.data.into_owned());

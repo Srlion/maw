@@ -17,7 +17,7 @@ use crate::{
 pub struct Request {
     pub(crate) app: Arc<App>,
     pub(crate) parts: http::request::Parts,
-    pub(crate) body: IncomingBody,
+    pub(crate) body: Option<IncomingBody>,
     pub params: HashMap<SmolStr, SmolStr>,
     pub locals: AnyMap<dyn CloneableAny>,
     pub(crate) cached_body: Option<Bytes>,
@@ -41,7 +41,7 @@ impl Request {
         Request {
             app,
             parts,
-            body,
+            body: Some(body),
             params,
             locals: AnyMap::new(),
             cached_body: None,
@@ -143,6 +143,12 @@ impl Request {
         self.body_limit = limit;
     }
 
+    /// Take the raw body, leaving `None` in its place.
+    #[inline]
+    pub fn take_body(&mut self) -> Option<IncomingBody> {
+        self.body.take()
+    }
+
     /// Get raw body bytes.
     ///
     /// If body has already been read, returns the cached bytes. (Limits are not re-applied.)
@@ -154,7 +160,11 @@ impl Request {
             return Ok(bytes);
         }
         let limit = self.body_limit;
-        let limited = http_body_util::Limited::new(&mut self.body, limit);
+        let raw = self
+            .body
+            .as_mut()
+            .ok_or_else(|| BodyError::Collect("body already taken".into()))?;
+        let limited = http_body_util::Limited::new(raw, limit);
         let collected = limited.collect().await.map_err(BodyError::Collect)?;
         let bytes = collected.to_bytes();
         self.cached_body = Some(bytes);
@@ -244,7 +254,10 @@ impl Request {
 
     #[inline]
     pub fn size_hint(&self) -> hyper::body::SizeHint {
-        hyper::body::Body::size_hint(&self.body)
+        match &self.body {
+            Some(body) => hyper::body::Body::size_hint(body),
+            None => hyper::body::SizeHint::default(),
+        }
     }
 
     #[inline]

@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.26.0"
+version = "0.26.1"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 repository = "https://github.com/Srlion/maw"
@@ -84,6 +84,7 @@ thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["net", "signal"] }
 tokio-util = "0.7.18"
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+listenfd = { version = "1", optional = true }
 
 # for examples
 [dev-dependencies]
@@ -115,3 +116,4 @@ static_files = ["dep:httpdate", "dep:rust-embed"]
 static_files_debug_embed = ["rust-embed?/debug-embed"]
 websocket = ["dep:hyper-tungstenite"]
 xml = ["dep:quick-xml"]
+listenfd = ["dep:listenfd"]

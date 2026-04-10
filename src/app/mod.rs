@@ -248,7 +248,22 @@ impl App {
             .next()
             .ok_or(Error::FailedToParseAddr)?;
 
-        let listener = TcpListener::bind(addr).await?;
+        let listener = {
+            #[cfg(feature = "listenfd")]
+            {
+                let mut listenfd = listenfd::ListenFd::from_env();
+                if let Ok(Some(std_listener)) = listenfd.take_tcp_listener(0) {
+                    std_listener.set_nonblocking(true)?;
+                    TcpListener::from_std(std_listener)?
+                } else {
+                    TcpListener::bind(addr).await?
+                }
+            }
+            #[cfg(not(feature = "listenfd"))]
+            {
+                TcpListener::bind(addr).await?
+            }
+        };
         tracing::info!("Http app listening on http://{}", addr);
 
         let server = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());

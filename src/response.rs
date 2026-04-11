@@ -301,16 +301,16 @@ impl Response {
     #[cfg(feature = "minijinja")]
     #[inline]
     pub fn get_render_ctx(&self) -> minijinja::Value {
-        let mut ctx = minijinja::__context::make();
+        let mut ctx = std::collections::BTreeMap::new();
         self.app.locals(|l| {
             for (key, value) in l {
-                ctx.insert(key.into(), minijinja::Value::from_serialize(value));
+                ctx.insert(key.to_string(), minijinja::Value::from_serialize(value));
             }
         });
         for (key, value) in &self.locals {
-            ctx.insert(key.into(), minijinja::Value::from_serialize(value));
+            ctx.insert(key.to_string(), minijinja::Value::from_serialize(value));
         }
-        minijinja::__context::build(ctx)
+        minijinja::Value::from(ctx)
     }
 
     #[cfg(feature = "minijinja")]

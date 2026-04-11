@@ -1,8 +1,8 @@
 use http::{Method, StatusCode};
 
 use crate::{
-    handler::Handler,
     ctx::Ctx,
+    handler::Handler,
     middlewares::cookie::{CookieOptions, CookieType},
 };
 
@@ -76,7 +76,7 @@ impl CsrfMiddleware {
 }
 
 fn generate_token() -> String {
-    use rand::RngCore;
+    use rand::Rng;
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     let mut result = String::with_capacity(64);

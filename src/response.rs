@@ -369,6 +369,24 @@ impl Response {
         let status_code = status.unwrap_or(StatusCode::FOUND);
         self.status(status_code);
     }
+
+    /// Streams a file as the response body, setting `Content-Type` and `Content-Length` automatically.
+    pub async fn send_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), std::io::Error> {
+        let path = path.as_ref();
+        let file = tokio::fs::File::open(path).await?;
+        let meta = file.metadata().await?;
+
+        let mime = mime_guess::from_path(path).first_or_octet_stream();
+        self.header(("Content-Type", mime.as_ref()));
+        self.header(("Content-Length", meta.len().to_string()));
+
+        self.stream(tokio_util::io::ReaderStream::with_capacity(file, 64 * 1024));
+
+        Ok(())
+    }
 }
 
 impl fmt::Debug for Response {

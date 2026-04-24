@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use base64::{Engine as _, engine::general_purpose};
 pub use cookie::{Cookie, CookieJar, Key, SameSite};
 use serde::{Serialize, de::DeserializeOwned};
@@ -154,8 +156,8 @@ impl CookieStore {
         if let Some(domain) = options.domain {
             builder = builder.domain(domain);
         }
-        if let Some(secure) = options.secure {
-            builder = builder.secure(secure);
+        if let Some(secure_fn) = &options.secure {
+            builder = builder.secure(secure_fn());
         }
         if let Some(http_only) = options.http_only {
             builder = builder.http_only(http_only);
@@ -224,15 +226,29 @@ impl Handler<&mut Ctx> for CookieMiddleware {
 }
 
 /// Options for setting cookies
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct CookieOptions {
     path: Option<String>,
     domain: Option<String>,
-    secure: Option<bool>,
+    secure: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
     http_only: Option<bool>,
     same_site: Option<SameSite>,
     max_age: Option<cookie::time::Duration>,
     expires: Option<cookie::time::OffsetDateTime>,
+}
+
+impl std::fmt::Debug for CookieOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CookieOptions")
+            .field("path", &self.path)
+            .field("domain", &self.domain)
+            .field("secure", &self.secure.as_ref().map(|f| f()))
+            .field("http_only", &self.http_only)
+            .field("same_site", &self.same_site)
+            .field("max_age", &self.max_age)
+            .field("expires", &self.expires)
+            .finish()
+    }
 }
 
 impl CookieOptions {
@@ -254,7 +270,15 @@ impl CookieOptions {
     }
 
     pub fn secure(mut self, secure: bool) -> Self {
-        self.secure = Some(secure);
+        self.secure = Some(Arc::new(move || secure));
+        self
+    }
+
+    pub fn secure_fn<F>(mut self, f: F) -> Self
+    where
+        F: Fn() -> bool + Send + Sync + 'static,
+    {
+        self.secure = Some(Arc::new(f));
         self
     }
 

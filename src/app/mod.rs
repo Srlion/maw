@@ -41,13 +41,12 @@ pub struct App<S = ()> {
     ///
     /// Default: 4MB
     pub(crate) body_limit: usize,
-    /// ProxyHeader will enable c.req.ip() to return the value of the given header key
-    /// By default c.req.ip() will return the Remote IP from the TCP connection
-    /// This property can be useful if you are behind a load balancer: X-Forwarded-*
-    /// NOTE: headers are easily spoofed and the detected IP addresses are unreliable.
+    /// When set, `c.req.ip()` returns the value of the header returned by this function
+    /// instead of the remote TCP address. Useful when behind a reverse proxy or load
+    /// balancer (e.g. `X-Forwarded-For`, `CF-Connecting-IP`).
     ///
-    /// Default: None
-    pub(crate) proxy_header: Option<String>,
+    /// NOTE: headers are easily spoofed; never trust them for security-sensitive decisions.
+    pub(crate) proxy_header_fn: Option<Arc<dyn Fn() -> Option<String> + Send + Sync>>,
 }
 
 impl Default for App {
@@ -69,7 +68,7 @@ impl App {
             shutdown_timeout: std::time::Duration::from_secs(10),
             dump_routes: false,
             body_limit: 4 * 1024 * 1024,
-            proxy_header: None,
+            proxy_header_fn: None,
         }
     }
 
@@ -85,7 +84,7 @@ impl App {
             shutdown_timeout: self.shutdown_timeout,
             dump_routes: self.dump_routes,
             body_limit: self.body_limit,
-            proxy_header: self.proxy_header,
+            proxy_header_fn: self.proxy_header_fn,
         }
     }
 
@@ -103,8 +102,24 @@ impl App {
     /// NOTE: headers are easily spoofed and the detected IP addresses are unreliable.
     ///
     /// Default: None (disabled)
-    pub fn proxy_header(mut self, header: impl Into<String>) -> Self {
-        self.proxy_header = Some(header.into());
+    pub fn proxy_header(self, header: impl Into<String>) -> Self {
+        let header = header.into();
+        self.proxy_header_fn(move || {
+            if header.is_empty() {
+                None
+            } else {
+                Some(header.clone())
+            }
+        })
+    }
+
+    /// Sets a dynamic proxy header provider, called once per request.
+    /// Return `Some(header_name)` to override the client IP, or `None` to use the TCP address.
+    pub fn proxy_header_fn<F>(mut self, f: F) -> Self
+    where
+        F: Fn() -> Option<String> + Send + Sync + 'static,
+    {
+        self.proxy_header_fn = Some(Arc::new(f));
         self
     }
 
@@ -321,7 +336,7 @@ impl Clone for App {
             shutdown_timeout: self.shutdown_timeout,
             dump_routes: self.dump_routes,
             body_limit: self.body_limit,
-            proxy_header: self.proxy_header.clone(),
+            proxy_header_fn: self.proxy_header_fn.clone(),
         }
     }
 }

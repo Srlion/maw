@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.29.0"
+version = "0.30.0"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 repository = "https://github.com/Srlion/maw"
@@ -45,6 +45,7 @@ cookie = { version = "0.18.1", features = [
   "signed",
 ], optional = true }
 erased-serde = { version = "0.4.10", optional = true }
+form_urlencoded = "1.2.2"
 futures-util = { version = "0.3.31", default-features = false }
 http = "1.4.0"
 http-body = "1.0.1"

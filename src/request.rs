@@ -287,6 +287,17 @@ impl Request {
         Ok(serde_urlencoded::from_str(qs)?)
     }
 
+    pub fn query_value<T: DeserializeOwned>(&self, key: &str) -> Result<T, QueryError> {
+        let qs = self.parts.uri.query().unwrap_or("");
+        let (_, value) = form_urlencoded::parse(qs.as_bytes())
+            .find(|(k, _)| k == key)
+            .ok_or(QueryError::Missing(key.into()))?;
+        serde_plain::from_str(&value).map_err(|e| QueryError::Invalid {
+            key: key.into(),
+            source: e,
+        })
+    }
+
     /// Takes the request body and returns a `multer::Multipart` for
     /// streaming multipart/form-data fields.
     ///
@@ -435,11 +446,26 @@ impl From<ParseError> for StatusError {
 pub enum QueryError {
     #[error("Failed to parse query string")]
     Parse(#[from] serde_urlencoded::de::Error),
+    #[error("Missing query parameter: {0}")]
+    Missing(SmolStr),
+    #[error("Invalid value for query parameter: {key}")]
+    Invalid {
+        key: SmolStr,
+        #[source]
+        source: serde_plain::Error,
+    },
 }
 
 impl From<QueryError> for StatusError {
-    fn from(_: QueryError) -> Self {
-        StatusError::bad_request().brief("Invalid query string")
+    fn from(e: QueryError) -> Self {
+        match e {
+            QueryError::Parse(_) => StatusError::bad_request().brief("Invalid query string"),
+            QueryError::Missing(key) => {
+                StatusError::bad_request().brief(format!("Missing query parameter: {key}"))
+            }
+            QueryError::Invalid { key, .. } => StatusError::unprocessable_entity()
+                .brief(format!("Invalid value for query parameter: {key}")),
+        }
     }
 }
 

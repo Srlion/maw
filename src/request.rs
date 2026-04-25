@@ -5,6 +5,7 @@ use http::{HeaderMap, HeaderValue, Method, Uri, Version, header::AsHeaderName};
 use http_body_util::BodyExt;
 use hyper::body::Incoming as IncomingBody;
 use mime_guess::{Mime, mime};
+use multer::Multipart;
 use serde::de::DeserializeOwned;
 use smol_str::SmolStr;
 
@@ -285,6 +286,38 @@ impl Request {
         let qs = self.parts.uri.query().unwrap_or("");
         Ok(serde_urlencoded::from_str(qs)?)
     }
+
+    /// Takes the request body and returns a `multer::Multipart` for
+    /// streaming multipart/form-data fields.
+    ///
+    /// ```rust
+    /// async fn upload(c: &mut Ctx) {
+    ///     let mut mp = c.req.multipart().unwrap();
+    ///     while let Some(field) = mp.next_field().await.unwrap() {
+    ///         let name = field.name().unwrap_or("").to_string();
+    ///         let data = field.bytes().await.unwrap();
+    ///         println!("{name}: {} bytes", data.len());
+    ///     }
+    /// }
+    /// ```
+    pub fn multipart(&mut self) -> Result<Multipart<'static>, MultipartError> {
+        let boundary = self
+            .content_type()
+            .ok_or(MultipartError::MissingContentType)
+            .and_then(|mime| {
+                if mime.type_() != mime::MULTIPART || mime.subtype() != mime::FORM_DATA {
+                    return Err(MultipartError::NotMultipart);
+                }
+                mime.get_param(mime::BOUNDARY)
+                    .map(|b| b.as_str().to_owned())
+                    .ok_or(MultipartError::MissingBoundary)
+            })?;
+
+        let body = self.take_body().ok_or(MultipartError::BodyTaken)?;
+        let stream = body.into_data_stream();
+
+        Ok(Multipart::new(stream, boundary))
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -407,5 +440,23 @@ pub enum QueryError {
 impl From<QueryError> for StatusError {
     fn from(_: QueryError) -> Self {
         StatusError::bad_request().brief("Invalid query string")
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MultipartError {
+    #[error("Missing Content-Type header")]
+    MissingContentType,
+    #[error("Not a multipart/form-data request")]
+    NotMultipart,
+    #[error("Missing boundary in Content-Type")]
+    MissingBoundary,
+    #[error("Body already taken")]
+    BodyTaken,
+}
+
+impl From<MultipartError> for StatusError {
+    fn from(e: MultipartError) -> Self {
+        StatusError::bad_request().brief(e.to_string())
     }
 }

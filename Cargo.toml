@@ -1,6 +1,6 @@
 [package]
 name = "maw"
-version = "0.30.2"
+version = "0.30.3"
 edition = "2024"
 description = "A simple and efficient web framework for Rust."
 repository = "https://github.com/Srlion/maw"

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use base64::{Engine as _, engine::general_purpose};
-pub use cookie::{Cookie, CookieJar, Key, SameSite};
+pub use cookie::{Cookie, CookieJar, Key, SameSite, time};
 use serde::{Serialize, de::DeserializeOwned};
 use smol_str::SmolStr;
 

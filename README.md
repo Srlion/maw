@@ -5,12 +5,12 @@ A minimal web framework for Rust. No macros, just functions.
 [![GitHub stars](https://img.shields.io/github/stars/srlion/maw?style=social)](https://github.com/srlion/maw)
 [![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4)](https://github.com/sponsors/srlion)
 
-## Why Maw?
+## Why
 
-- **No macros** - Rust already looks beautiful, no need to hide it. Some frameworks go heavy on type gymnastics—we'd rather keep things readable
-- **Express-style `next()`** - Call `c.next().await`, then inspect/modify the response after. Most Rust frameworks don't let you do this
-- **Debug your routes** - Print the router to see exactly what handlers run where, with source locations
-- **Fast enough** - High RPS, competitive performance. Some APIs trade microseconds for ergonomics, but Rust is already faster than Go/Node anyway
+- No macros. Routes are just functions, nothing hidden behind attributes.
+- `c.next().await` works like Express/Fiber middleware. Call it, then inspect or modify the response after.
+- `println!("{router:#?}")` prints every route with its handlers and, in debug builds, source location.
+- Handlers can be closures, plain functions, or structs.
 
 ## Quick Start
 
@@ -34,32 +34,19 @@ async fn main() -> Result<(), MawError> {
 
 ## Middleware
 
-Works like Express/Fiber. Call `next()`, do stuff before/after:
+Call `next()`, do work before and after it:
 
 ```rust
 Router::new()
     .middleware(async |c: &mut Ctx| {
         let start = std::time::Instant::now();
         c.next().await;
-        println!("took {:?}", start.elapsed()); // runs AFTER handler
+        println!("took {:?}", start.elapsed()); // after the handler runs
     })
     .get("/", async |_: &mut Ctx| "Hello!")
 ```
 
-Or attach middleware to specific routes:
-
-```rust
-.get("/protected", ((
-    async |c: &mut Ctx| {
-        let start = std::time::Instant::now();
-        c.next().await;
-        println!("took {:?}", start.elapsed()); // runs AFTER handler
-    },
-    async |c: &mut Ctx| {
-        c.res.send("secret stuff");
-    },
-)))
-```
+Or scope it to one route:
 
 ```rust
 .get("/protected", (auth_middleware, async |c: &mut Ctx| {
@@ -70,45 +57,57 @@ Or attach middleware to specific routes:
 ## Three Ways to Write Handlers
 
 ```rust
-// 1. Async closure
+// Closure
 .get("/", async |c: &mut Ctx| c.res.send("hi"))
 .get("/", async |_: &mut Ctx| "hi")
 
-// 2. Function
-async fn handler(c: &mut Ctx) {
-    c.res.send("hi");
-}
+// Function
 async fn handler(c: &mut Ctx) -> &'static str {
     "hi"
 }
 .get("/", handler)
 
-// 3. Struct - implement Handler (AsyncFn1) for stateful handlers, you can
+// Struct, for handlers that carry their own state
 struct RateLimit { max: u32 }
 
 impl Handler<&mut Ctx> for RateLimit {
     type Output = ();
     async fn call(&self, c: &mut Ctx) -> Self::Output {
-        // check rate limit using self.max...
         c.next().await;
     }
 }
 
 .middleware(RateLimit { max: 100 })
-
-//
-
-struct Hello { name: String }
-
-impl Handler<&mut Ctx> for Hello {
-    type Output = ();
-    async fn call(&self, c: &mut Ctx) -> Self::Output {
-        c.res.send(format!("Hello, {}!", self.name));
-    }
-}
-
-.get("/hello", Hello { name: "Alice".into() })
 ```
+
+## Passing Extra Data Into a Handler
+
+`WithState` lets you hand a closure some extra value without writing a struct for it:
+
+```rust
+.get("/users/{id}", WithState(db_pool.clone(), async |c: &mut Ctx, pool: DbPool| {
+    let id: u32 = c.req.param("id")?;
+    // use pool
+    Ok(())
+}))
+```
+
+No separate handler type, no trait impl, just a closure that takes one more argument. The value needs `Clone + Send + Sync + 'static`.
+
+## Request Data
+
+```rust
+async |c: &mut Ctx| {
+    let id: u32 = c.req.param("id")?;
+    let q: MyQuery = c.req.query()?;
+    let body: MyBody = c.req.json().await?;
+    // .form(), and with the `xml` feature, .xml()
+    // .parse() picks json/form/xml based on Content-Type
+    Ok(())
+}
+```
+
+`c.req.locals` is a typed per-request map (`AnyMap`) for stashing values between middleware and handlers. `c.res.locals` does the same for template context.
 
 ## Route Groups
 
@@ -126,25 +125,11 @@ Router::new()
     .push(admin)
 ```
 
-## Debug Your Routes
-
-```rust
-let router = Router::new()
-    .middleware(logging)
-    .push(api)
-    .push(admin);
-
-println!("{router:#?}");
-// Shows every route, its handlers, and where they're defined
-```
-
 ## Features
-
-Enable what you need:
 
 ```toml
 [dependencies]
-maw = { version = "0.19", features = ["minijinja", "websocket"] }
+maw = { version = "X.Y", features = ["minijinja", "websocket"] }
 ```
 
 | Feature | What |
@@ -152,19 +137,21 @@ maw = { version = "0.19", features = ["minijinja", "websocket"] }
 | `minijinja` | Template rendering |
 | `xml` | XML request/response support |
 | `websocket` | WebSocket support |
-| `static_files` | Serve embedded files |
-| `middleware-cookie` | Cookie parsing/setting |
-| `middleware-session` | Session management |
-| `middleware-csrf` | CSRF protection |
+| `static_files` | Serve embedded files, with optional SPA fallback |
+| `middleware-cookie` | Cookie parsing/setting (plain, signed, encrypted) |
+| `middleware-session` | Session management, pluggable storage backend |
+| `middleware-csrf` | CSRF protection (cookie or session backed) |
 | `middleware-logging` | Request logging |
-| `middleware-catch_panic` | Panic recovery |
-| `middleware-body_limit` | Request body size limits |
+| `middleware-catch_panic` | Panic recovery, with optional custom handler |
+| `middleware-body_limit` | Per-request body size limits |
 | `middleware` | All middleware features |
 | `full` | Everything |
 
+Check `Cargo.toml` for the current version. Don't copy the `X.Y` above literally.
+
 ## Templates
 
-Uses [MiniJinja](https://github.com/mitsuhiko/minijinja):
+[MiniJinja](https://github.com/mitsuhiko/minijinja):
 
 ```rust
 let app = App::new()
@@ -181,6 +168,14 @@ let app = App::new()
     );
 ```
 
+## Static Files
+
+```rust
+Router::new().static_files("/", StaticFiles::new(Assets).fallback_to("index.html"))
+```
+
+`fallback_to` serves that file when a path doesn't match anything embedded, useful for SPAs. `max_age` sets `Cache-Control`. `Last-Modified` / `If-Modified-Since` are handled for you.
+
 ## WebSocket
 
 ```rust
@@ -193,7 +188,7 @@ let app = App::new()
 })
 ```
 
-## Server-Sent Events (SSE)
+## Server-Sent Events
 
 ```rust
 use bytes::Bytes;
@@ -204,9 +199,35 @@ use futures_util::stream;
         Ok::<Bytes, std::convert::Infallible>(Bytes::from("data: hello\n\n")),
     ]);
 
-    // Sets SSE headers and auto-closes when app shutdown begins.
+    // sets SSE headers, closes automatically on app shutdown
     c.res.sse(stream);
 })
+```
+
+## Errors
+
+Return `Result<T, StatusError>` from a handler and Maw turns it into the right response:
+
+```rust
+async |c: &mut Ctx| -> Result<(), StatusError> {
+    if !authorized {
+        return Err(StatusError::forbidden());
+    }
+    Ok(())
+}
+```
+
+`StatusError` has a constructor for every standard status code, plus `.brief()`, `.detail()`, and `.error()` to attach more context.
+
+## Debug Your Routes
+
+```rust
+let router = Router::new()
+    .middleware(logging)
+    .push(api)
+    .push(admin);
+
+println!("{router:#?}");
 ```
 
 ## License

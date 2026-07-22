@@ -176,6 +176,7 @@ impl CookieStore {
     }
 }
 
+#[derive(Default)]
 pub struct CookieMiddleware {
     key: Option<cookie::Key>,
 }

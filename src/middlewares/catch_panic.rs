@@ -9,10 +9,11 @@ use std::{
 use http::StatusCode;
 use pin_project_lite::pin_project;
 
-use crate::{handler::Handler, ctx::Ctx};
+use crate::{ctx::Ctx, handler::Handler};
 
 pub struct NoPanicHandler;
 
+#[derive(Default)]
 pub struct CatchPanicMiddleware<F = NoPanicHandler> {
     on_panic: F,
 }

@@ -5,7 +5,7 @@ async fn main() -> Result<(), MawError> {
     tracing_subscriber::fmt::init();
 
     let api = Router::group("/api")
-        .get("/users", async |c: &mut Ctx| c.res.json(&["Alice", "Bob"]))
+        .get("/users", async |c: &mut Ctx| c.res.json(["Alice", "Bob"]))
         .post("/users", async |c: &mut Ctx| {
             c.res.send("Created");
         });

@@ -1,5 +1,6 @@
-use crate::{handler::Handler, ctx::Ctx};
+use crate::{ctx::Ctx, handler::Handler};
 
+#[derive(Default)]
 pub struct LoggingMiddleware {
     _p: (),
 }

@@ -268,11 +268,10 @@ impl Request {
 
     #[inline]
     pub fn ip(&self) -> String {
-        if let Some(ref f) = self.app.proxy_header_fn {
-            if let Some(header_name) = f() {
+        if let Some(ref f) = self.app.proxy_header_fn
+            && let Some(header_name) = f() {
                 return self.extract_ip_from_header(&header_name);
             }
-        }
         self.ip.to_string()
     }
 

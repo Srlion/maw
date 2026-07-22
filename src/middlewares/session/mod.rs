@@ -97,7 +97,7 @@ impl SessionMiddleware {
     /// Create a new SessionConfig with default values
     pub fn new() -> Self {
         Self {
-            storage: CookieStorage::default(),
+            storage: CookieStorage,
             cookie_name: "maw.session".into(),
             cookie_type: CookieType::Signed,
             cookie_options: CookieOptions::new()

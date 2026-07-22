@@ -98,15 +98,13 @@ impl<E: RustEmbed + Sync> Handler<&mut Ctx> for StaticFiles<E> {
             let modified = UNIX_EPOCH + Duration::from_secs(last_modified);
             c.res.header(("Last-Modified", fmt_http_date(modified)));
 
-            if let Some(ims) = c.req.headers().get("If-Modified-Since") {
-                if let Ok(ims_str) = ims.to_str() {
-                    if let Ok(ims_time) = parse_http_date(ims_str) {
-                        if modified <= ims_time {
-                            c.res.send_status(StatusCode::NOT_MODIFIED);
-                            return;
-                        }
-                    }
-                }
+            if let Some(ims) = c.req.headers().get("If-Modified-Since")
+                && let Ok(ims_str) = ims.to_str()
+                && let Ok(ims_time) = parse_http_date(ims_str)
+                && modified <= ims_time
+            {
+                c.res.send_status(StatusCode::NOT_MODIFIED);
+                return;
             }
         }
 

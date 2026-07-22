@@ -92,7 +92,7 @@ impl Ctx {
         self.req
             .locals
             .get::<&str>("csrf_token")
-            .map(|s| *s)
+            .copied()
             .unwrap_or("")
     }
 

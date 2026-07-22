@@ -53,7 +53,7 @@ impl AnyValue for dyn CloneableAny {
 pub struct AnyMap<V: ?Sized + AnyValue> {
     // If map is never used, no need to carry around an empty HashMap.
     // That's 3 words. Instead, this is only 1 word.
-    map: Option<Box<HashMap<String, Box<V>>>>,
+    map: Option<HashMap<String, Box<V>>>,
 }
 
 impl Clone for AnyMap<dyn CloneableAny> {
@@ -113,7 +113,7 @@ impl<V: ?Sized + AnyValue> AnyMap<V> {
     pub fn extend(&mut self, other: Self) {
         if let Some(other_map) = other.map {
             if let Some(ref mut map) = self.map {
-                map.extend(*other_map);
+                map.extend(other_map);
             } else {
                 self.map = Some(other_map);
             }
@@ -148,14 +148,14 @@ impl AnyMap<dyn CloneableAny> {
         val: T,
     ) -> Option<T> {
         self.map
-            .get_or_insert_with(Box::default)
+            .get_or_insert_default()
             .insert(key.into(), Box::new(val))
             .and_then(|b| b.into_any().downcast().ok().map(|b| *b))
     }
 
     pub fn set<T: Clone + Send + Sync + 'static>(&mut self, key: impl Into<String>, val: T) {
         self.map
-            .get_or_insert_with(Box::default)
+            .get_or_insert_default()
             .insert(key.into(), Box::new(val));
     }
 
@@ -165,7 +165,7 @@ impl AnyMap<dyn CloneableAny> {
     {
         let out = self
             .map
-            .get_or_insert_with(Box::default)
+            .get_or_insert_default()
             .entry(key.into())
             .or_insert_with(|| Box::new(f()));
         out.as_any_mut().downcast_mut().unwrap()
@@ -323,7 +323,7 @@ mod serializable_any {
             val: T,
         ) -> Option<T> {
             self.map
-                .get_or_insert_with(Box::default)
+                .get_or_insert_default()
                 .insert(key.into(), Box::new(val))
                 .and_then(|b| b.into_any().downcast().ok().map(|b| *b))
         }
@@ -334,7 +334,7 @@ mod serializable_any {
             val: T,
         ) {
             self.map
-                .get_or_insert_with(Box::default)
+                .get_or_insert_default()
                 .insert(key.into(), Box::new(val));
         }
 
@@ -348,7 +348,7 @@ mod serializable_any {
         {
             let out = self
                 .map
-                .get_or_insert_with(Box::default)
+                .get_or_insert_default()
                 .entry(key.into())
                 .or_insert_with(|| Box::new(f()));
             out.as_any_mut().downcast_mut().unwrap()

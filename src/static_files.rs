@@ -1,8 +1,10 @@
 use std::{
+    borrow::Cow,
     marker::PhantomData,
     time::{Duration, UNIX_EPOCH},
 };
 
+use bytes::Bytes;
 use http::StatusCode;
 use httpdate::{fmt_http_date, parse_http_date};
 use rust_embed::RustEmbed;
@@ -115,6 +117,10 @@ impl<E: RustEmbed + Sync> Handler<&mut Ctx> for StaticFiles<E> {
             c.res.header(("Cache-Control", cc.as_str()));
         }
 
-        c.res.send(file.data.into_owned());
+        let bytes = match file.data {
+            Cow::Borrowed(b) => Bytes::from_static(b),
+            Cow::Owned(v) => Bytes::from(v),
+        };
+        c.res.send(bytes);
     }
 }

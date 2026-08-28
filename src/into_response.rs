@@ -79,13 +79,19 @@ impl IntoResponse for &'static [u8] {
 
 impl IntoResponse for Cow<'static, str> {
     fn into_response(self, c: &mut Ctx) {
-        c.res.send(self.into_owned());
+        match self {
+            Cow::Borrowed(s) => c.res.send(Bytes::from_static(s.as_bytes())),
+            Cow::Owned(o) => c.res.send(o),
+        }
     }
 }
 
 impl IntoResponse for Cow<'static, [u8]> {
     fn into_response(self, c: &mut Ctx) {
-        c.res.send(self.into_owned());
+        match self {
+            Cow::Borrowed(b) => c.res.send(Bytes::from_static(b)),
+            Cow::Owned(o) => c.res.send(o),
+        }
     }
 }
 

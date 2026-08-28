@@ -147,8 +147,8 @@ impl Response {
         self.status(status);
 
         if self.inner.body().size_hint().exact() == Some(0) {
-            let text = status.canonical_reason().unwrap_or("").to_string();
-            *self.inner.body_mut() = HttpBody::full(Bytes::from(text));
+            let text = status.canonical_reason().unwrap_or("");
+            *self.inner.body_mut() = HttpBody::full(Bytes::from_static(text.as_bytes()));
         }
 
         self

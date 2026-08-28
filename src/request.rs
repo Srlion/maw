@@ -421,9 +421,7 @@ impl From<ParseError> for StatusError {
             ParseError::Xml(ref err) => {
                 use quick_xml::de::DeError;
                 match err {
-                    DeError::InvalidXml(_)
-                    | DeError::UnexpectedEof
-                    | DeError::UnexpectedStart(_) => {
+                    DeError::InvalidXml(_) | DeError::UnexpectedEof | DeError::MixedContent(_) => {
                         StatusError::bad_request().brief("Invalid XML syntax")
                     }
                     DeError::Custom(_) => StatusError::unprocessable_entity()

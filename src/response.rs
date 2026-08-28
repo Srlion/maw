@@ -21,6 +21,8 @@ use crate::{
     error::Error,
 };
 
+static HTML_CT: HeaderValue = HeaderValue::from_static("text/html; charset=utf-8");
+
 pub type BoxError = Box<dyn StdError + Send + Sync>;
 
 pub enum StreamKind {
@@ -255,18 +257,20 @@ impl Response {
         S: Stream<Item = Result<Bytes, E>> + Send + Sync + 'static,
         E: Into<BoxError> + 'static,
     {
-        self.header([
-            ("Content-Type", "text/event-stream"),
-            ("Cache-Control", "no-cache"),
-            ("X-Accel-Buffering", "no"), // Disable buffering for nginx
-        ]);
+        static SSE_CT: HeaderValue = HeaderValue::from_static("text/event-stream");
+        static NO_CACHE: HeaderValue = HeaderValue::from_static("no-cache");
+        static NO_BUFFERING: HeaderValue = HeaderValue::from_static("no");
+        static X_ACCEL_BUFFERING: HeaderName = HeaderName::from_static("x-accel-buffering");
+
+        let headers = self.inner.headers_mut();
+        headers.insert(header::CONTENT_TYPE, SSE_CT.clone());
+        headers.insert(header::CACHE_CONTROL, NO_CACHE.clone());
+        headers.insert(X_ACCEL_BUFFERING.clone(), NO_BUFFERING.clone()); // Disable buffering for nginx
 
         let shutdown = self.app.shutdown_token().cancelled_owned();
-
         let stream = stream
             .map(|result| result.map_err(Into::into))
             .take_until(shutdown);
-
         *self.inner.body_mut() = HttpBody::stream(stream);
     }
 
@@ -281,19 +285,26 @@ impl Response {
 
     #[inline]
     pub fn html(&mut self, s: &'static str) {
-        self.content_type("text/html; charset=utf-8").send(s);
+        self.inner
+            .headers_mut()
+            .insert(header::CONTENT_TYPE, HTML_CT.clone());
+        self.send(s);
     }
 
     #[inline]
     pub fn json(&mut self, value: impl serde::Serialize) {
-        match serde_json::to_string(&value) {
-            Ok(json_str) => self
-                .content_type("application/json; charset=utf-8")
-                .send(json_str),
+        static JSON_CT: HeaderValue = HeaderValue::from_static("application/json; charset=utf-8");
+        match serde_json::to_vec(&value) {
+            Ok(buf) => {
+                self.inner
+                    .headers_mut()
+                    .insert(header::CONTENT_TYPE, JSON_CT.clone());
+                *self.inner.body_mut() = HttpBody::full(Bytes::from(buf));
+            }
             Err(e) => {
                 tracing::error!("failed to serialize JSON response: {e}");
                 self.status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .send("Internal Server Error")
+                    .send("Internal Server Error");
             }
         }
     }
@@ -316,10 +327,13 @@ impl Response {
     #[cfg(feature = "minijinja")]
     fn send_rendered(&mut self, result: Result<String, minijinja::Error>, label: &str) {
         match result {
-            Ok(rendered) => self
-                .status(StatusCode::OK)
-                .content_type("text/html; charset=utf-8")
-                .send(rendered),
+            Ok(rendered) => {
+                self.status(StatusCode::OK);
+                self.inner
+                    .headers_mut()
+                    .insert(header::CONTENT_TYPE, HTML_CT.clone());
+                self.send(rendered);
+            }
             Err(e) => {
                 tracing::warn!("failed to render {label}: {e}");
                 self.send_status(StatusCode::INTERNAL_SERVER_ERROR);

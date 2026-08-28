@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use bytes::Bytes;
 use http::{HeaderMap, HeaderValue, Method, Uri, Version, header::AsHeaderName};
@@ -262,17 +262,15 @@ impl Request {
     }
 
     #[inline]
-    fn extract_ip_from_header(&self, header_name: &str) -> String {
-        self.header(header_name).unwrap_or_default().to_string()
-    }
-
-    #[inline]
-    pub fn ip(&self) -> String {
-        if let Some(ref f) = self.app.proxy_header_fn
-            && let Some(header_name) = f() {
-                return self.extract_ip_from_header(&header_name);
-            }
-        self.ip.to_string()
+    pub fn ip(&self) -> IpAddr {
+        if let Some(f) = &self.app.proxy_header_fn
+            && let Some(h) = f()
+            && let Some(v) = self.header(h)
+            && let Ok(ip) = v.parse()
+        {
+            return ip;
+        }
+        self.ip.ip()
     }
 
     #[inline]

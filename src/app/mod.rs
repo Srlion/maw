@@ -288,6 +288,7 @@ impl App {
                     let Ok((stream, peer_addr)) = listener.accept().await else {
                         continue;
                     };
+                    let _ = stream.set_nodelay(true);
                     let io = TokioIo::new(stream);
                     let app = arc_app.clone();
                     let service = hyper::service::service_fn(move |req| {

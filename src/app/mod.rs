@@ -240,7 +240,9 @@ impl App {
         let middlewares: Vec<_> = {
             let mut called = HashSet::new();
             self.router
-                .flatten_routers().values().flat_map(|m| m.values())
+                .flatten_routers()
+                .values()
+                .flat_map(|m| m.values())
                 .flat_map(|h| h.iter())
                 .filter(|h| called.insert(h.type_id()))
                 .cloned()

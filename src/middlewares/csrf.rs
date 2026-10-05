@@ -91,8 +91,8 @@ impl Ctx {
     pub fn csrf_token(&self) -> &str {
         self.req
             .locals
-            .get::<&str>("csrf_token")
-            .copied()
+            .get::<String>("csrf_token")
+            .map(|s| s.as_str())
             .unwrap_or("")
     }
 

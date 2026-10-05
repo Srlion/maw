@@ -63,7 +63,7 @@ impl CsrfMiddleware {
     pub fn cookie_type(mut self, cookie_type: CookieType) -> Self {
         assert!(
             !matches!(cookie_type, CookieType::Plain),
-            "Session cookie type cannot be Plain for security reasons"
+            "CSRF cookie type cannot be Plain for security reasons"
         );
         self.cookie_type = cookie_type;
         self

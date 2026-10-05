@@ -76,14 +76,13 @@ impl CsrfMiddleware {
 }
 
 fn generate_token() -> String {
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
     use rand::Rng;
+
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
-    let mut result = String::with_capacity(64);
-    for byte in bytes {
-        result.push_str(&format!("{:02x}", byte));
-    }
-    result
+
+    URL_SAFE_NO_PAD.encode(bytes)
 }
 
 impl Ctx {

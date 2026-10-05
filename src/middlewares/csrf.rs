@@ -106,8 +106,11 @@ impl Handler<&mut Ctx> for CsrfMiddleware {
     type Output = ();
 
     fn on_app_listen_mut(&self, app: &mut crate::prelude::App) {
-        app.jinja
-            .with(|env| env.add_global("csrf_header", CSRF_HEADER));
+        #[cfg(feature = "minijinja")]
+        {
+            app.jinja
+                .with(|env| env.add_global("csrf_header", CSRF_HEADER));
+        }
     }
 
     async fn call(&self, c: &mut Ctx) -> Self::Output {
